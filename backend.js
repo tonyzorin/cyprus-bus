@@ -79,9 +79,12 @@ app.get('/api/vehicle-positions', async (req, res) => {
     }
 });
 
+
 app.get('/api/route-shapes/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
+        console.log('routeId:', routeId);
+
         const result = await query(
             'SELECT shape_pt_lat, shape_pt_lon FROM shapes WHERE shape_id = $1 ORDER BY shape_pt_sequence ASC',
             [routeId]

@@ -16,7 +16,7 @@ function initMap() {
     fetchStops();
     fetchBusPositions();
     showUserPosition();
-    setInterval(fetchBusPositions, 7000); // Refresh bus positions every 10 seconds
+    setInterval(fetchBusPositions, 70000); // Refresh bus positions every 10 seconds
 }
 
 var busStopIcon = L.icon({
@@ -40,6 +40,14 @@ var userIcon = L.icon({
     popupAnchor: [0, -40]
 });
 
+function getbusIcon() {
+    return L.icon({
+        iconUrl: './images/pin0.png',
+        iconSize: [35, 47],
+        iconAnchor: [17.5, 35],
+        popupAnchor: [0, -47]
+    });
+}
 function fetchStops() {
     fetch('/api/stops')
         .then(response => response.json())
@@ -69,25 +77,25 @@ function fetchBusPositions() {
                 if (busMarkers[vehicleLabel]) {
                     moveMarkerSmoothly(busMarkers[vehicleLabel], [latitude, longitude]);
                 } else {
-                    const marker = L.marker([latitude, longitude], {icon: busIcon}).addTo(map)
+                    const marker = L.marker([latitude, longitude], {icon: getbusIcon(routeShortName)}).addTo(map)
                         .bindPopup(`Bus <b>${routeShortName}</b> (vehicle ${vehicleLabel})<br>${routeLongName}`);
-                        marker.on('click', () => onBusMarkerClick(entity.routeId)); // Assuming entity.routeId is available
+                    marker.on('click', () => onBusMarkerClick(entity.routeId)); // Assuming entity.routeId is available
                     busMarkers[vehicleLabel] = marker;
 
                 }
                 newMarkers[vehicleLabel] = busMarkers[vehicleLabel];
                 // Determine the correct pin image based on route number
-                let pinImage = busIcon(routeShortName);
+                let pinImage = getbusIcon(routeShortName);
 
                 if (busMarkers[vehicleLabel]) {
                     // Move existing marker smoothly to the new position
                     moveMarkerSmoothly(busMarkers[vehicleLabel], [latitude, longitude]);
                     // Update the icon if route has changed
-                    busMarkers[vehicleLabel].setIcon(busIcon);
+                    busMarkers[vehicleLabel].setIcon(getbusIcon());
                 } else {
                     // Create a new marker and add it to the map with the determined icon
                     const marker = L.marker([latitude, longitude], {icon: getBusIcon(routeShortName)}).addTo(map);
-                        bindPopup(`Bus <b>${routeShortName}</b> (vehicle ${vehicleLabel})<br>${routeLongName}`);
+                    bindPopup(`Bus <b>${routeShortName}</b> (vehicle ${vehicleLabel})<br>${routeLongName}`);
                     busMarkers[vehicleLabel] = marker;
                 }
                 // Add to newMarkers to keep track of which markers are still active
@@ -99,6 +107,8 @@ function fetchBusPositions() {
         })
         .catch(error => console.error('Error fetching vehicle positions:', error));
 }
+
+
 
 
 // Function to determine the correct pin image based on the route number
@@ -124,37 +134,65 @@ function moveMarkerSmoothly(marker, newPosition) {
 }
 
 // This function is triggered when a bus marker is clicked
+
+//fetch(`/api/route-shapes/30350012`)
+
+
+
 function onBusMarkerClick(routeId) {
-    fetch(`/api/route-shapes/${routeId}`)
-        .then(response => response.json())
+    fetch(`/api/route-shapes/30350012`)        .then(response => response.json())
         .then(shapePoints => {
+            if (!Array.isArray(shapePoints) || shapePoints.length === 0) {
+                console.warn("No route shapes returned for routeId:", routeId);
+                return; // Exit the function if no shapes were returned
+            }
+
             const latLngs = shapePoints.map(point => [point.shape_pt_lat, point.shape_pt_lon]);
-            const polyline = L.polyline(latLngs, {color: 'blue'}).addTo(map); // Customize color as needed
-            map.fitBounds(polyline.getBounds());
+            if (latLngs.length > 0) {
+                const polyline = L.polyline(latLngs, {color: 'blue'}).addTo(map);
+                map.fitBounds(polyline.getBounds());
+            } else {
+                console.warn("Invalid or empty latLngs array for routeId:", routeId);
+            }
         })
         .catch(error => console.error('Error fetching route shapes:', error));
 }
 
-const latitude = entity.vehicle.position?.latitude;
-const longitude = entity.vehicle.position?.longitude;
 
-if (latitude !== undefined && longitude !== undefined) {
-    // Proceed to use latitude and longitude
-} else {
-    console.error('Latitude or longitude is undefined for entity', entity);
-}
+/*function onBusMarkerClick(routeId) {
+    fetch(`/api/route-shapes/30350012`)
+    //fetch(`/api/route-shapes/${routeId}`) // Ensure routeId is dynamically included in the request
+        .then(response => response.json()) // Wait for JSON parsing
+        .then(shapePoints => {
+            if (!Array.isArray(shapePoints) || shapePoints.length === 0) {
+                console.error("shapePoints is not an array or is empty", shapePoints);
+                return; // Exit the function if shapePoints is not an array or is empty
+            }
 
+            // Create an array of latLng tuples from shapePoints
+            const latLngs = shapePoints.map(point => {
+                if (typeof point.shape_pt_lat === 'number' && typeof point.shape_pt_lon === 'number') {
+                    return [point.shape_pt_lat, point.shape_pt_lon];
+                }
+                return null;
+            }).filter(point => point !== null); // Filter out any null values that were added due to invalid data
 
-function showUserPosition() {
-    if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(function (position) {
-            var lat = position.coords.latitude;
-            var lon = position.coords.longitude;
-            });
-            L.marker([lat, lon], {icon: userIcon}).addTo(map)
-                .bindPopup('You are here!').openPopup();
-        }
-    }
+            if (latLngs.length === 0) {
+                console.error("No valid latitude and longitude values found in shapePoints", shapePoints);
+                return; // Exit the function if no valid latLng tuples were created
+            }
+
+            console.log("Valid latLngs for polyline:", latLngs); // Log valid latLngs
+
+            try {
+                const polyline = L.polyline(latLngs, {color: 'blue'}).addTo(map); // Add polyline to the map
+                map.fitBounds(polyline.getBounds()); // Fit map bounds to polyline
+            } catch (error) {
+                console.error("Error creating polyline or fitting map bounds:", error);
+            }
+        })
+        .catch(error => console.error('Error fetching route shapes:', error));
+}*/
 
 function showUserPosition() {
     if ('geolocation' in navigator) {
