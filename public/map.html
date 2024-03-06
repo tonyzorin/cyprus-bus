@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stops Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        /* Make the map container full screen */
+        #map {
+            height: 100vh; /* Use 100% of the viewport height */
+            width: 100vw; /* Use 100% of the viewport width */
+            position: absolute; /* Optional: Makes the map more responsive to screen size changes */
+            top: 0;
+            left: 0;
+        }
+        body, html {
+            height: 100%; /* Ensure the body and html take the full height of the viewport */
+            margin: 0; /* Remove default margin */
+            padding: 0; /* Remove default padding */
+        }
+        h3 {
+            position: absolute;
+            z-index: 1000; /* Ensure the heading appears above the map */
+            margin: 10px; /* Adjust as needed */
+            background-color: white; /* Make it visible on top of the map */
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .marker {
+            transform: perspective(40px) rotateX(20deg) rotateZ(-45deg);
+            transform-origin: 50% 50%;
+            border-radius: 50% 50% 50% 0;
+            padding: 0 3px 3px 0;
+            width: 40px;
+            height: 40px;
+            background: #ed1f34;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            margin: -2.2em 0 0 -1.3em;
+            -webkit-box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
+            -moz-box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
+            box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
+        }
+
+        .beacon-effect::before {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 255, 0.3); // Blue color
+        border-radius: 50%;
+            animation: pulse-animation 2s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker:after {
+            content: '';
+            width: 1em;
+            height: 1em;
+            margin: 1em 0 0 .7em;
+            background: #ffffff;
+            position: absolute;
+            border-radius: 50%;
+            -moz-box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+            -webkit-box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+            box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+            -moz-box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+            -webkit-box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+            box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+        }
+        .beacon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            height: 3em;
+            width: 3em;
+            border-radius: 50%;
+            -webkit-transform: translateX(-50%);
+            -o-transform: translateX(-50%);
+            -moz-transform: translateX(-50%);
+            -ms-transform: translateX(-50%);
+            transform: translateX(-50%);
+            z-index: -1
+        }
+
+        .beacon:before,
+        .beacon:after {
+            position: absolute;
+            content: "";
+            height: 3em;
+            width: 3em;
+            left: 0;
+            top: 0;
+            background-color: transparent;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px #ed1f34;
+            -webkit-animation: active 2s infinite linear;
+            -moz-animation: active 2s infinite linear;
+            animation: active 2s infinite linear;
+        }
+
+        .beacon:after {
+            -moz-animation-delay: 1s;
+            -webkit-animation-delay: 1s;
+            animation-delay: 1s;
+        }
+
+        @-webkit-keyframes active {
+            0% {
+                -webkit-transform: scale(.1);
+                opacity: 1;
+            }
+            100% {
+                -webkit-transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        @keyframes-blue active {
+            0% {
+                transform: scale(.1);
+                transform: box-shadow(0px 0px 0px 1px #ed1f34);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+        @keyframes-red active {
+            0% {
+                transform: scale(.1);
+                transform: box-shadow(0px 0px 0px 1px #ed1f34);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+    </style>
+
+</head>
+<body>
+<script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
+<script>
+    ProdCamp('initFeedbackWidget', {
+        email: 'random@mail.com'
+    });
+</script>
+<h3>Welcome to the Cyprus Public Transit App</h3>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="/js/frontend.js"></script>
+</body>
+</html>
