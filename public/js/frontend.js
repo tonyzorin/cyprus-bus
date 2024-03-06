@@ -27,7 +27,7 @@ var busStopIcon = L.icon({
 });
 
 var busIcon = L.icon({
-    iconUrl: './images/pin1.png',
+    iconUrl: './images/pin0.png',
     iconSize: [35, 47],
     iconAnchor: [17.5, 35],
     popupAnchor: [0, -47]
