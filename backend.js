@@ -64,9 +64,11 @@ app.get('/api/vehicle-positions', async (req, res) => {
                 const routeDetails = routeDetailsResult.rows[0];
                 position.routeShortName = routeDetails.route_short_name;
                 position.routeLongName = routeDetails.route_long_name;
+                position.routeId = routeId;
             } else {
                 position.routeShortName = "# Unknown";
                 position.routeLongName = "Unknown Route";
+                position.routeId = "Unknown routeId";
             }
             return position;
         }));
@@ -87,8 +89,12 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
 
         const result = await query(
             'SELECT shape_pt_lat, shape_pt_lon FROM shapes WHERE shape_id = $1 ORDER BY shape_pt_sequence ASC',
-            [routeId]
+            [routeId] // Pass routeId as a parameter for your SQL query
         );
+        // Log the result after the query has been executed and result is assigned
+        console.log('result:', result);
+        console.log('Shape results:', result.rows);
+        // Send the rows from the query result as a JSON response
         res.json(result.rows);
     } catch (err) {
         console.error('Error fetching route shapes:', err);
