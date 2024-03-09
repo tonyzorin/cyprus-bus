@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 let map; // Declare map variable at the top level for global access
 let busMarkers = []; // Array to store references to bus markers
+let currentRoutePolyline = null; // This will store the current route polyline
+
 
 function initMap() {
     // Initialize the map if it hasn't been already
@@ -37,7 +39,7 @@ var userIcon = L.icon({
     iconUrl: './images/current-location.png',
     iconSize: [40, 40],
     iconAnchor: [24, 40],
-    popupAnchor: [0, -40]
+    popupAnchor: [0, 0]
 });
 
 function getbusIcon() {
@@ -141,17 +143,27 @@ function moveMarkerSmoothly(marker, newPosition) {
 }
 
 function onBusMarkerClick(routeId) {
-    fetch(`/api/route-shapes/${routeId}`)        .then(response => response.json())
+    fetch(`/api/route-shapes/${routeId}`)
+        .then(response => response.json())
         .then(shapePoints => {
             if (!Array.isArray(shapePoints) || shapePoints.length === 0) {
                 console.warn("No route shapes returned for routeId:", routeId);
                 return; // Exit the function if no shapes were returned
             }
 
+            // Remove the previous route from the map if it exists
+            if (currentRoutePolyline) {
+                map.removeLayer(currentRoutePolyline);
+                currentRoutePolyline = null; // Reset the currentRoutePolyline
+            }
+
             const latLngs = shapePoints.map(point => [point.shape_pt_lat, point.shape_pt_lon]);
+            const routeColor = `#${shapePoints[0].route_color}`; // Extract color
+
             if (latLngs.length > 0) {
-                const polyline = L.polyline(latLngs, {color: 'blue',weight: 5}).addTo(map);
-                map.fitBounds(polyline.getBounds());
+                // Create the polyline without altering the map's view
+                currentRoutePolyline = L.polyline(latLngs, {color: routeColor, weight: 6}).addTo(map);
+                // Do not call map.fitBounds() to avoid changing the zoom level and center
             } else {
                 console.warn("Invalid or empty latLngs array for routeId:", routeId);
             }
@@ -159,12 +171,40 @@ function onBusMarkerClick(routeId) {
         .catch(error => console.error('Error fetching route shapes:', error));
 }
 
+
+
 function showUserPosition() {
     if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(function(position) {
-            var lat = position.coords.latitude;
-            var lon = position.coords.longitude;
-            // Your code that uses lat and lon here
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            // Define custom HTML content that includes both the image and the beacon effect
+            const customHtmlContent = `
+                <div class="custom-marker-container">
+                    <img src="./images/current-location.png" alt="current location" class="user-icon" />
+                    <div class="beacon"></div> <!-- Beacon effect -->
+                </div>
+            `;
+
+            // Use Leaflet's DivIcon for the custom HTML content
+            const customIcon = L.divIcon({
+                className: 'custom-user-location-icon', // Custom class to avoid default leaflet marker styles
+                iconSize: [40, 40], // Adjust based on the size of your icon image + beacon size
+                html: customHtmlContent
+            });
+
+            // Create a marker with the custom icon and add it to the map
+            L.marker([lat, lon], {icon: customIcon}).addTo(map);
+
+            // Optionally, center the map on the user's location without changing the zoom level
+            map.panTo([lat, lon]);
+        }, function(error) {
+            console.error("Geolocation error:", error);
+        }, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
         });
     }
 }
