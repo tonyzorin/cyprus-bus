@@ -2,15 +2,16 @@ const backend = require('express');
 const axios = require('axios');
 const {connect: connect, query} = require('./database.js');
 const app = backend();
+const dotenv = require('dotenv')
 require('dotenv').config();
 const port = process.env.PORT || 3000;
 const {readPositionsJson} = require('./parseGTFS');
 const fs = require("fs");
-const env = process.env.NODE_ENV || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
-//const config = require(`./../config.${env}.js`);
-//const glx = require('greenlock-express').create(config.greenlock);
+const env = "process.env.NODE_ENV" || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
+app.use(backend.static('./'));
 
-app.use(backend.static('./../public'));
+app.get('/', (req, res) => res.send('Hello World!'));
+
 
 app.get('/api/stops', async (req, res) => {
     try {
@@ -22,8 +23,6 @@ app.get('/api/stops', async (req, res) => {
     }
 });
 
-// Define routes
-app.get('/', (req, res) => res.send('Hello World!'));
 
 // Function to fetch data from provided url, used to reduce redundancy
 const fetchData = async (url, errorMessage) => {
