@@ -1,0 +1,22 @@
+version: '3'
+services:
+  nodejs-app:
+    build: .
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - "3001:3000"
+  caddy:
+    image: caddy:2.7.6
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nodejs-app
+volumes:
+  caddy_data:
+  caddy_config:

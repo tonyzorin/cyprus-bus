@@ -6,14 +6,20 @@ let map; // Declare map variable at the top level for global access
 let busMarkers = []; // Array to store references to bus markers
 let currentRoutePolyline = null; // This will store the current route polyline
 
-
 function initMap() {
     // Initialize the map if it hasn't been already
     if (!map) {
-        map = L.map('map').setView([34.679309, 33.037098], 17);
+        map = L.map('map', {
+            center: [34.679309, 33.037098],
+            zoom: 17,
+            attributionControl: false // Disable the default attribution control
+        });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
+
+        // Add a new attribution control at the top right ("topright")
+        L.control.attribution({position: 'topright'}).addTo(map);
     }
     fetchStops();
     fetchBusPositions();
