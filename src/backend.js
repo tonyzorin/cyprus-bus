@@ -2,11 +2,12 @@ const backend = require('express');
 const axios = require('axios');
 const {connect: connect, query} = require('./database.js');
 const app = backend();
-const port = process.env.PORT || 80;
+const port = process.env.PORT || 3000;
 const {readPositionsJson} = require('./parseGTFS');
 const fs = require("fs");
-
-//const app = express();
+const env = process.env.NODE_ENV || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
+const config = require(`./../config.${env}.js`);
+require('dotenv').config();
 
 
 const BUS_POSITIONS_URL = process.env.BUS_POSITIONS_URL;
@@ -98,8 +99,8 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
             [routeId] // Pass routeId as a parameter for your SQL query
         );
         // Log the result after the query has been executed and result is assigned
-        console.log('result:', result);
-        console.log('Shape results:', result.rows);
+        //console.log('result:', result);
+        //console.log('Shape results:', result.rows);
         // Send the rows from the query result as a JSON response
         res.json(result.rows);
     } catch (err) {

@@ -3,7 +3,7 @@ const protobuf = require("protobufjs");
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const protoPath = "gtfs-realtime.proto";
-const gtfsRealtimeUrl = "http://20.19.98.194:8328/Api/api/gtfs-realtime";
+const gtfsRealtimeUrl = "process.env.BUS_POSITIONS_URL";
 
 function readPositionsJson() {
     return new Promise((resolve, reject) => {
