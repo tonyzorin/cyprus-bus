@@ -2,18 +2,14 @@ const backend = require('express');
 const axios = require('axios');
 const {connect: connect, query} = require('./database.js');
 const app = backend();
+require('dotenv').config();
 const port = process.env.PORT || 3000;
 const {readPositionsJson} = require('./parseGTFS');
 const fs = require("fs");
 const env = process.env.NODE_ENV || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
-const config = require(`./../config.${env}.js`);
-require('dotenv').config();
+//const config = require(`./../config.${env}.js`);
+//const glx = require('greenlock-express').create(config.greenlock);
 
-
-const BUS_POSITIONS_URL = process.env.BUS_POSITIONS_URL;
-const TIMETABLES_URL = process.env.TIMETABLES_URL;
-
-// Middleware to serve static files
 app.use(backend.static('./../public'));
 
 app.get('/api/stops', async (req, res) => {
