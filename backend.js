@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 const {readPositionsJson} = require('./parseGTFS');
 const fs = require("fs");
 const env = "process.env.NODE_ENV" || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
-app.use(backend.static('./'));
+app.use(backend.static('./../'));
 
 app.get('/', (req, res) => res.send('Hello World!'));
 

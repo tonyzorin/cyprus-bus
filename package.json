@@ -1,9 +1,10 @@
 {
-  "name": "cy-bus",
+  "name": "bus.cy",
   "version": "1.0.0",
   "description": "",
   "main": "backend.js",
   "scripts": {
+    "start": "node backend.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
