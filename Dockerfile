@@ -18,8 +18,6 @@ RUN npm install
 
 # Bundle app source
 COPY . .
-COPY package.json ./
-COPY package-lock.json ./
 
 # Your app binds to port 3000, make sure you use the same port
 EXPOSE 3000

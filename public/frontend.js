@@ -188,7 +188,7 @@ function showUserPosition() {
             // Define custom HTML content that includes both the image and the beacon effect
             const customHtmlContent = `
                 <div class="custom-marker-container">
-                    <img src="./images/current-location.png" alt="current location" class="user-icon" />
+                    <img src="images/current-location.png" alt="current location" class="user-icon" />
                     <div class="beacon"></div> <!-- Beacon effect -->
                 </div>
             `;

@@ -4,6 +4,7 @@ services:
     build: .
     volumes:
       - .:/usr/src/app
+      - ./public:/usr/src/app/public
     ports:
       - "3001:3000"
   caddy:

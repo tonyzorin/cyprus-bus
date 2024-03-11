@@ -1,8 +1,9 @@
 antonzorin.com {
-    root * /usr/src/app/
+    root * /usr/src/app/public/
     file_server
     encode gzip
-    reverse_proxy localhost:3001
+    reverse_proxy /api/* localhost:3001
+    reverse_proxy * localhost:3001
 
     # Optionally, enforce HTTPS
     # Redirection from HTTP to HTTPS is automatic with Caddy
