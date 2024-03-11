@@ -83,7 +83,7 @@ app.get('/api/vehicle-positions', async (req, res) => {
 app.get('/api/route-shapes/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
-        console.log('routeId:', routeId);
+        //console.log('routeId:', routeId);
 
         const result = await query(
             'SELECT shapes.shape_pt_lat, shapes.shape_pt_lon, routes.route_color ' +
