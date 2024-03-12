@@ -5,17 +5,21 @@ services:
     volumes:
       - .:/usr/src/app
       - ./public:/usr/src/app/public
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy_data:/data
+      - ./caddy_config:/config
     ports:
       - "3001:3000"
   caddy:
     image: caddy:2.7.6
+    container_name: caddy
+    hostname: caddy
+    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
+      - "8443:443"
+   # env_file:
+   #   - ./.env
+    tty: true
     depends_on:
       - nodejs-app
 volumes:
