@@ -4,8 +4,15 @@ antonzorin.com {
     encode gzip
     reverse_proxy /api/* localhost:3001
     reverse_proxy * localhost:3001
-
     # Optionally, enforce HTTPS
     # Redirection from HTTP to HTTPS is automatic with Caddy
 }
 
+
+http://localhost:3001 {
+    reverse_proxy nodejs-app:3000
+}
+
+https://localhost:8443 {
+    reverse_proxy nodejs-app:3000
+}

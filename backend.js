@@ -100,7 +100,7 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
         // Send the rows from the query result as a JSON response
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching route shapes:', err);
+        //console.error('Error fetching route shapes:', err);
         res.status(500).json({ error: 'Internal server error fetching route shapes' });
     }
 });
