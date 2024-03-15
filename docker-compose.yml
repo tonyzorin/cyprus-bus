@@ -9,19 +9,25 @@ services:
       - ./caddy_data:/data
       - ./caddy_config:/config
     ports:
-      - "3001:3000"
+      - "3000:3000"
+    networks:
+      - my_network
   caddy:
     image: caddy:2.7.6
     container_name: caddy
     hostname: caddy
     restart: unless-stopped
     ports:
-      - "8443:443"
+      - "443:443"
    # env_file:
    #   - ./.env
     tty: true
     depends_on:
       - nodejs-app
+    networks:
+      - my_network
 volumes:
   caddy_data:
   caddy_config:
+networks:
+  my_network:
