@@ -27,20 +27,6 @@ function initMap() {
     setInterval(fetchBusPositions, 7000); // Refresh bus positions every 10 seconds
 }
 
-var busStopIcon = L.icon({
-    iconUrl: './images/bus-stop.png',
-    iconSize: [16, 16],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -32]
-});
-
-var busIcon = L.icon({
-    iconUrl: './images/pin0.png',
-    iconSize: [35, 47],
-    iconAnchor: [17.5, 35],
-    popupAnchor: [0, -47]
-});
-
 var userIcon = L.icon({
     iconUrl: './images/current-location.png',
     iconSize: [40, 40],
@@ -48,6 +34,12 @@ var userIcon = L.icon({
     popupAnchor: [0, 0]
 });
 
+var busStopIcon = L.icon({
+    iconUrl: './images/bus-stop.png',
+    iconSize: [14, 14],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -28]
+});
 function getbusIcon() {
     return L.icon({
         iconUrl: './images/pin0.png',
@@ -56,13 +48,21 @@ function getbusIcon() {
         popupAnchor: [0, -47]
     });
 }
+function createRotatedIcon(bearing) {
+    return L.divIcon({
+        html: `<img src="./images/pin0.png" style="transform: rotate({entity.position.bearing}deg);"/>`,
+        iconSize: [35, 47],
+        iconAnchor: [17.5, 23.5],
+        className: 'rotated-icon' // Use our custom class
+    });
+}
 function fetchStops() {
     fetch('/api/stops')
         .then(response => response.json())
         .then(stops => {
             console.log(stops); // Log the stops data for debugging
             stops.forEach(stop => {
-                L.marker([stop.lat, stop.lon], {icon: busStopIcon}).addTo(map)
+                L.marker([stop.lat, stop.lon], {icon: busStopIcon, zIndexOffset: 2}).addTo(map)
                     .bindPopup(`<b>${stop.name}</b>`);
             });
         })
@@ -77,15 +77,14 @@ function fetchBusPositions() {
             const newMarkers = {}; // Temporary storage for markers processed in this fetch
 
             data.forEach(entity => {
-                //const latitude = entity.vehicle.position?.latitude;
-                //const longitude = entity.vehicle.position?.longitude;
                 const {routeShortName, routeLongName} = entity;
                 const {latitude, longitude} = entity.vehicle.position;
                 const vehicleLabel = entity.vehicle.vehicle.label;
                 if (busMarkers[vehicleLabel]) {
                     moveMarkerSmoothly(busMarkers[vehicleLabel], [latitude, longitude]);
                 } else {
-                    const marker = L.marker([latitude, longitude], {icon: getbusIcon(routeShortName)}).addTo(map)
+                    const marker = L.marker([latitude, longitude], {icon: getbusIcon(routeShortName), zIndexOffset: 1000}).addTo(map)
+                    //const rotatedMarker = L.marker([latitude, longitude], {icon: createRotatedIcon(entity.vehicle.position.bearing),zIndexOffset: 1000}).addTo(map)
                         .bindPopup(`Bus <b>${routeShortName}</b> (vehicle ${vehicleLabel})<br>${routeLongName}<br>Route ID: ${entity.routeId}`);
                     marker.on('click', () => {
                         if (entity.routeId) {
@@ -94,9 +93,7 @@ function fetchBusPositions() {
                             console.error('routeId is undefined for vehicleLabel:', vehicleLabel);
                         }
                     });
-    // Assuming entity.routeId is available
                     busMarkers[vehicleLabel] = marker;
-
                 }
                 newMarkers[vehicleLabel] = busMarkers[vehicleLabel];
                 // Determine the correct pin image based on route number
@@ -188,7 +185,7 @@ function showUserPosition() {
             // Define custom HTML content that includes both the image and the beacon effect
             const customHtmlContent = `
                 <div class="custom-marker-container">
-                    <img src="images/current-location.png" alt="current location" class="user-icon" />
+                    <img src="images/current-location.png" alt="current location" class="user-icon on-top" />
                     <div class="beacon"></div> <!-- Beacon effect -->
                 </div>
             `;
