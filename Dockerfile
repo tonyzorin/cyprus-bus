@@ -15,6 +15,14 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 RUN npm install
+# Update `uuid` and remove `request` in favor of `axios`
+RUN npm install uuid@latest axios && npm uninstall request
+
+# Fix vulnerabilities
+RUN npm audit fix
+
+# Update npm to the latest version within the major version range you prefer
+RUN npm install -g npm@10.5.0
 
 # Bundle app source
 COPY . .
