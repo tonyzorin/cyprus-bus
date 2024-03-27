@@ -1,9 +1,28 @@
 #map {
-    height: 90vh; /* Use 100% of the viewport height */
+    height: 91vh; /* Use 100% of the viewport height */
     width: 100vw; /* Use 100% of the viewport width */
     position: absolute; /* Optional: Makes the map more responsive to screen size changes */
     top: 0;
     left: 0;
+}
+.tab-content {
+    display: none;
+    /* Position offscreen initially */
+    position: fixed;
+    top: 0;
+    left: -100vw;
+    width: 90vw;
+    height: 100vh;
+    z-index: 10; /* Ensure it's above the map but below the menu */
+    transition: left 0.3s; /* Smooth transition for sliding in */
+}
+.tab-content.active {
+    /*display: block;*/
+    left: 0; /* Bring the active tab onscreen */
+}
+}
+.leaflet-popup-pane {
+    z-index: 10;
 }
 body, html {
     height: 100%; /* Ensure the body and html take the full height of the viewport */
@@ -15,9 +34,32 @@ h3 {
     z-index: 1000; /* Ensure the heading appears above the map */
     margin-left: 60px; /* Adjust as needed */
     background-color: white; /* Make it visible on top of the map */
+    top: 5%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     padding: 5px;
     border-radius: 5px;
 }
+.leaflet-marker-icon, .leaflet-div-icon {
+    border: none !important;
+    background: none !important;
+}
+
+.custom-marker-container img {
+    border: none !important;
+    background-color: transparent !important;
+}
+
+.pin-container {
+    width: 2rem;
+    height: 2rem;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform-origin: bottom;
+}
+
 .behind {
     position: absolute;
     left: 0px;
@@ -28,28 +70,13 @@ h3 {
     position: absolute;
     left: 0px;
     top: 0px;
-    z-index: 2; /* On top */
+    z-index: 700; /* On top */
+}
 .on-top {
     position: absolute;
     left: 0px;
     top: 0px;
-    z-index: 100; /* On top */
-}
-.marker {
-    transform: perspective(40px) rotateX(20deg) rotateZ(-45deg);
-    transform-origin: 50% 50%;
-    border-radius: 50% 50% 50% 0;
-    padding: 0 0 0 0;
-    width: 40px;
-    height: 40px;
-    background: #ed1f34;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    margin: -2.2em 0 0 -1.3em;
-    -webkit-box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
-    -moz-box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
-    box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
+    z-index: 1000; /* On top */
 }
 
 .beacon-effect::before {
@@ -99,7 +126,7 @@ border-radius: 50%;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    z-index: 2; /* Higher than the beacon effect */
+    z-index: 1000; /* Higher than the beacon effect */
 }
 
 .beacon-effect::before {
@@ -110,7 +137,7 @@ border-radius: 50%;
     background: rgba(0, 0, 255, 0.3);
     border-radius: 50%;
     animation: pulse-animation 2s infinite;
-    z-index: 1; /* Same as .beacon to keep effect beneath the icon */
+    z-index: 350; /* Same as .beacon to keep effect beneath the icon */
 }
 .beacon:after {
     position: absolute;
@@ -131,7 +158,7 @@ border-radius: 50%;
     color: white;
 }
 .menu-item {
-    background-color: #000000 0.7; /* Example active color, adjust as needed */
+    background-color: rgba(0, 0, 0, 0.7); /* Corrected semi-transparent black */
     color: white;
 }
 .bottom-menu {
@@ -153,18 +180,7 @@ border-radius: 50%;
     }
 }
 
-@-webkit-keyframes active {
-    0% {
-        -webkit-transform: scale(.1);
-        opacity: 1;
-    }
-    100% {
-        -webkit-transform: scale(2.5);
-        opacity: 0;
-    }
-}
-
-@keyframes-blue active {
+@keyframes active {
     0% {
         transform: scale(.1);
         transform: box-shadow(0px 0px 0px 1px #1f41ed);

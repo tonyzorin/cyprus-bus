@@ -6,7 +6,7 @@ const gtfsRealtimeUrl = "http://20.19.98.194:8328/Api/api/gtfs-realtime"
 // Cache implementation
 let cache = {
     timestamp: 0,
-    duration: 120 * 1000, // Cache duration in milliseconds (e.g., 120000ms is 2 minutes)
+    duration: 3141 * 1, // Cache duration in milliseconds (e.g., 120000ms is 2 minutes)
     data: null
 };
 
