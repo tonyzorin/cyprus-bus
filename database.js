@@ -6,7 +6,7 @@ const pool = new Pool({
 //    host: "process.env.POSTGRES_HOST",
 //    database: "process.env.POSTGRES_DB",
     user: "tonyzorin",
-    host: "ec2-3-73-155-99.eu-central-1.compute.amazonaws.com",
+        host: "ec2-3-73-155-99.eu-central-1.compute.amazonaws.com",
     database: "cy-transit",
     password: "[>&As9$6eRTn!ee!.9a!bDDq@d>Q5)(W3TfxvTnf", // It's safer to use an environment variable for the password
     max: 20, // Example: set pool size to 20

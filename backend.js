@@ -10,9 +10,7 @@ const fs = require("fs");
 const env = "process.env.NODE_ENV" || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
 app.use(backend.static('./public'));
 
-
 app.get('/', (req, res) => res.send('Hello World!'));
-
 
 app.get('/api/stops', async (req, res) => {
     try {
@@ -48,36 +46,52 @@ app.get('/api/vehicle-positions', async (req, res) => {
         const positionsData = positionsDataObject.entity;
 
         const augmentedPositions = await Promise.all(positionsData.map(async (position) => {
-            // Check if vehicle and trip objects exist before attempting to access properties
             if (!position.vehicle || !position.vehicle.trip) {
-                //console.warn('Skipping position due to missing vehicle or trip data:', position);
-                return null; // Skip this position or handle it as needed
+                if (LOGGING_ENABLED) {
+                    console.warn('Skipping position due to missing vehicle or trip data:', position);
+                }
+                return null; // Correct placement for this line
             }
 
+            const bearing = position.vehicle.position?.bearing || 0;
+            const speed = Math.round(position.vehicle.position?.speed || 0);
             const routeId = position.vehicle.trip.routeId;
-            const routeDetailsQuery = `SELECT route_short_name, route_long_name FROM routes WHERE "routeId" = $1`;
-            const routeDetailsResult = await query(routeDetailsQuery, [routeId]);
+            const routeDetailsResult = await query(`SELECT route_short_name, route_long_name, route_color, route_text_color FROM routes WHERE "routeId" = $1`, [routeId]);
+
             if (routeDetailsResult.rows.length > 0) {
                 const routeDetails = routeDetailsResult.rows[0];
-                position.routeShortName = routeDetails.route_short_name;
-                position.routeLongName = routeDetails.route_long_name;
-                position.routeId = position.vehicle.trip.routeId;
+                return {
+                    ...position,
+                    routeShortName: routeDetails.route_short_name,
+                    routeLongName: routeDetails.route_long_name,
+                    routeId: position.vehicle.trip.routeId,
+                    routeColor: routeDetails.route_color,
+                    routeTextColor: routeDetails.route_text_color,
+                    bearing: bearing,
+                    speed: speed
+                };
             } else {
-                position.routeShortName = "# Unknown";
-                position.routeLongName = "Unknown Route";
-                position.routeId = "Unknown routeId";
+                // Assuming you want to return a default structure if route details are not found
+                return {
+                    ...position,
+                    routeShortName: "# Unknown",
+                    routeLongName: "Unknown Route",
+                    routeId: "Unknown routeId",
+                    routeColor: "000000", // Default to black
+                    routeTextColor: "FFFFFF", // Default to white
+                    bearing: bearing || 0,
+                    speed: speed || 0
+                };
             }
-
-            return position;
         }));
-        //console.error('back good');
-        // Filter out nulls if you chose to return null for positions without vehicle or trip data
+
         res.json(augmentedPositions.filter(position => position !== null));
     } catch (error) {
         console.error('Failed to fetch vehicle positions:', error);
         res.status(500).send('Failed to fetch vehicle positions');
     }
 });
+
 
 
 app.get('/api/route-shapes/:routeId', async (req, res) => {
@@ -117,6 +131,7 @@ function createTimetablesHandler(fetchData, url) {
         }
     };
 }
+
 
 app.listen(port, () => {
     console.log(`Server listening on port ${port}`);

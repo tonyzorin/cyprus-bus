@@ -1,0 +1,193 @@
+#map {
+    height: 91vh; /* Use 100% of the viewport height */
+    width: 100vw; /* Use 100% of the viewport width */
+    position: absolute; /* Optional: Makes the map more responsive to screen size changes */
+    top: 0;
+    left: 0;
+}
+.tab-content {
+    display: none;
+    /* Position offscreen initially */
+    position: fixed;
+    top: 0;
+    left: -100vw;
+    width: 90vw;
+    height: 100vh;
+    z-index: 10; /* Ensure it's above the map but below the menu */
+    transition: left 0.3s; /* Smooth transition for sliding in */
+}
+.tab-content.active {
+    /*display: block;*/
+    left: 0; /* Bring the active tab onscreen */
+}
+}
+.leaflet-popup-pane {
+    z-index: 10;
+}
+body, html {
+    height: 100%; /* Ensure the body and html take the full height of the viewport */
+    margin: 0; /* Remove default margin */
+    padding: 0; /* Remove default padding */
+}
+h3 {
+    position: absolute;
+    z-index: 1000; /* Ensure the heading appears above the map */
+    margin-left: 60px; /* Adjust as needed */
+    background-color: white; /* Make it visible on top of the map */
+    top: 5%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 5px;
+    border-radius: 5px;
+}
+.leaflet-marker-icon, .leaflet-div-icon {
+    border: none !important;
+    background: none !important;
+}
+
+.custom-marker-container img {
+    border: none !important;
+    background-color: transparent !important;
+}
+
+.pin-container {
+    width: 2rem;
+    height: 2rem;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform-origin: bottom;
+}
+
+.behind {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    z-index: 1; /* Behind */
+}
+.almost-on-top {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    z-index: 700; /* On top */
+}
+.on-top {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    z-index: 1000; /* On top */
+}
+
+.beacon-effect::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 255, 0.3); // Blue color
+border-radius: 50%;
+    animation: pulse-animation 2s infinite;
+}
+
+@keyframes pulse-animation {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+
+.marker:after {
+    content: '';
+    width: 1em;
+    height: 1em;
+    margin: 1em 0 0 .7em;
+    background: #ffffff;
+    position: absolute;
+    border-radius: 50%;
+    -moz-box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+    -webkit-box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+    box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+    -moz-box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+    -webkit-box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+    box-shadow: inset -2px 2px 4px hsla(0, 0, 0, .5);
+}
+.beacon {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 50px; /* The beacon effect will be slightly larger than the icon */
+    width: 50px;
+    border-radius: 50%;
+    transform: translate(0%, 0%);
+    z-index: 1; /* Lower than the icon */
+}
+.user-icon {
+    width: 50px; /* Width of the user icon */
+    height: 50px; /* Height of the user icon */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000; /* Higher than the beacon effect */
+}
+
+.beacon-effect::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 255, 0.3);
+    border-radius: 50%;
+    animation: pulse-animation 2s infinite;
+    z-index: 350; /* Same as .beacon to keep effect beneath the icon */
+}
+.beacon:after {
+    position: absolute;
+    content: "";
+    height: 3em;
+    width: 3em;
+    left: 0;
+    top: 0;
+    background-color: transparent;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px #1f41ed;
+    -webkit-animation: active 2s infinite linear;
+    -moz-animation: active 2s infinite linear;
+    animation: active 3s infinite linear;
+}
+.menu-item.active {
+    background-color: #007bff; /* Example active color, adjust as needed */
+    color: white;
+}
+.menu-item {
+    background-color: rgba(0, 0, 0, 0.7); /* Corrected semi-transparent black */
+    color: white;
+}
+.bottom-menu {
+    display: flex;
+    justify-content: space-around;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 50px;
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+    color: white;
+    z-index: 1001;
+}
+@media (max-width: 768px) {
+    .bottom-menu {
+        height: 40px; /* Adjust for mobile */
+    }
+}
+
+@keyframes active {
+    0% {
+        transform: scale(.1);
+        transform: box-shadow(0px 0px 0px 1px #1f41ed);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(2.5);
+        opacity: 0;
+    }
+}

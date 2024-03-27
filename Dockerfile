@@ -15,6 +15,10 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 RUN npm install
+# Update `uuid` and remove `request` in favor of `axios`
+
+# Fix vulnerabilities
+RUN npm audit fix
 
 # Bundle app source
 COPY . .
