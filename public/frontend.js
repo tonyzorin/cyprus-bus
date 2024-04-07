@@ -25,7 +25,7 @@ async function initMap() {
     await fetchStops();
     fetchBusPositions();
     showUserPosition();
-    setInterval(fetchBusPositions, 5000); // Refresh bus positions every 10 seconds
+    setInterval(fetchBusPositions, 50000); // Refresh bus positions every 10 seconds
 }
 
 var userIcon = L.icon({
@@ -55,65 +55,30 @@ function fetchStops() {
         .catch(error => console.error('Error fetching stops:', error));
 }
 
-
 async function fetchOrCreatePin(routeShortName, routeColor, routeTextColor) {
-    // Defaulting to pin0.png and "?" for unknown routes
-    const isUnknownRoute = routeShortName === "Unknown" || !routeShortName || routeColor === "Unknown" || !routeColor;
-    const pinImagePath = routeColor === "Unknown" ? './images/pins/pin0.png' : `./images/pins/${routeColor}.png`;
+    // Ensure color format is correct (add '#' if missing)
     const displayText = routeShortName === "Unknown" ? "?" : routeShortName;
+    routeColor = routeColor.startsWith('#') ? routeColor : `#${routeColor}`;
+    routeTextColor = routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor}`;
 
-    let pinImage = new Image();
-    pinImage.src = pinImagePath;
 
-    try {
-        await pinImage.decode();
+    const svgContent = `
+   <svg width="70" height="95" viewBox="0 0 70 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M34.9556 94.6442C34.0638 94.651 33.1921 94.3771 32.462 93.8607C31.7319 93.3443 31.1797 92.6112 30.8825 91.7634C26.3231 79.0907 9.31643 60.1199 9.13405 59.9207L9.02766 59.7828C4.49113 54.7241 1.50766 48.4471 0.43903 41.7129C-0.629603 34.9786 0.262503 28.0764 3.00718 21.8431C5.75186 15.6099 10.2312 10.3135 15.902 6.59609C21.5729 2.87869 28.1916 0.900024 34.9556 0.900024C41.7195 0.900024 48.3383 2.87869 54.0091 6.59609C59.6799 10.3135 64.1593 15.6099 66.9039 21.8431C69.6486 28.0764 70.5407 34.9786 69.4721 41.7129C68.4035 48.4471 65.42 54.7241 60.8834 59.7828L60.7771 59.9207C60.5947 60.1199 43.588 79.0907 39.0286 91.7634C38.7333 92.6124 38.1817 93.3469 37.4511 93.8636C36.7206 94.3803 35.8479 94.6533 34.9556 94.6442Z" fill="${routeColor}"/>
+    <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;">${routeShortName}</text>
+</svg>
+    `;
 
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 32;
-        canvas.height = 47;
+    const encodedSvg = encodeURIComponent(svgContent);
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
 
-        ctx.drawImage(pinImage, 0, 0, 32, 47);
-        ctx.fillStyle = `#${routeTextColor}`;
-        ctx.font = 'bold 12px Arial';
-        ctx.textAlign = 'center';
-        const textX = canvas.width / 2;
-        const textY = canvas.height / 2.5;
-        ctx.fillText(displayText, textX, textY);
-
-        const iconUrl = canvas.toDataURL('image/png');
-        return L.icon({
-            iconUrl: iconUrl,
-            iconSize: [canvas.width, canvas.height],
-            iconAnchor: [canvas.width / 2, canvas.height],
-            popupAnchor: [0, -canvas.height / 2]
-        });
-    } catch (error) {
-        console.error('Error creating custom pin:', error);
-        return L.icon({
-            iconUrl: './images/pins/pin0.png', // Fallback for any error
-            iconSize: [32, 47],
-            iconAnchor: [16, 47],
-            popupAnchor: [0, -47]
-        });
-    }
+    return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [32, 47],
+        iconAnchor: [16, 47],
+        popupAnchor: [0, -47]
+    });
 }
-
-
-async function fetchBusPositions() {
-    try {
-        const response = await fetch('/api/vehicle-positions');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        await processVehiclePositions(data);
-        //cleanupMarkers(activeVehicleLabels); // Ensure this is correctly passed
-    } catch (error) {
-        console.error('Error fetching vehicle positions:', error);
-    }
-}
-
 
 async function processVehiclePositions(data) {
     const activeVehicleLabels = new Set(); // Track active vehicles
@@ -127,9 +92,17 @@ async function processVehiclePositions(data) {
 
             // Update the icon with new bearing
             const bearing = entity.vehicle.position.bearing+180 || 0; // Default to 0 if undefined
-            const customHtmlContent = `<div style="transform: rotate(${bearing}deg);"><img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;"/></div>`;
+            const customHtmlContent = `
+            <div style="position: relative; font-size: 12px; text-align: center; width: 70px;">
+                <div style="position: relative; top: 78%; left: 60%; transform: translateX(-100%) rotate(${bearing}deg);">
+                    <img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;">
+                        <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate(-${bearing}deg); color: ${entity.routeTextColor};">
+                            ${entity.routeShortName}
+                        </div>
+                </div>
+            </div>`;
             const customIcon = L.divIcon({
-                html: customHtmlContent,
+                html: svgContent,
                 iconSize: [32, 47],
                 iconAnchor: [16, 23.5], // Adjust as necessary
                 popupAnchor: [0, -23.5] // Adjust as necessary
@@ -148,18 +121,29 @@ async function processVehiclePositions(data) {
     cleanupMarkers(activeVehicleLabels);
 }
 
-
+async function fetchBusPositions() {
+    try {
+        const response = await fetch('/api/vehicle-positions');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        await processVehiclePositions(data);
+        //cleanupMarkers(activeVehicleLabels); // Ensure this is correctly passed
+    } catch (error) {
+        console.error('Error fetching vehicle positions:', error);
+    }
+}
 
 
 async function extractMarkerData(entity) {
-    const routeShortName = entity.routeShortName || "Unknown";
+    const routeShortName = entity.routeShortName || "?";
     const latitude = entity.vehicle.position.latitude;
     const longitude = entity.vehicle.position.longitude;
     const bearing = entity.vehicle.position.bearing || 0;
     const vehicleLabel = entity.vehicle.vehicle.label || "N/A";
-    const routeColor = entity.routeColor || "#000000";
-    const textColor = entity.routeTextColor || "#ffffff";
-    // Wait for the icon to be fetched/created
+    const routeColor = entity.routeColor.startsWith('#') ? entity.routeColor : `#${entity.routeColor}`;
+    const routeTextColor = entity.routeTextColor.startsWith('#') ? entity.routeTextColor : `#${entity.routeTextColor}`;// Wait for the icon to be fetched/created
     const markerIcon = await fetchOrCreatePin(routeShortName, entity.routeColor, entity.routeTextColor);
 
     return { latitude, longitude, markerIcon, vehicleLabel: entity.vehicle.vehicle.label };
@@ -180,35 +164,43 @@ function cleanupMarkers(activeVehicleLabels) {
 
 async function createNewMarker(latitude, longitude, markerIcon, entity) {
     const bearing = entity.vehicle.position.bearing || 0; // Use 0 as default if undefined
+    const routeShortName = entity.routeShortName || "?";
+    const routeTextColor = entity.routeTextColor || "#000000"; // Default to black if undefined
 
-    // Prepare the pin image with rotation
-    const pinHtmlContent = `<img src="${markerIcon.options.iconUrl}" style="transform: rotate(${bearing}deg); width: 32px; height: 47px;"/>`;
+    // Ensure routeTextColor starts with "#" for a valid hex color
+    const validRouteTextColor = routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor}`;
 
-    // Prepare the text without rotation, ensuring it stays horizontal
-    const textHtmlContent = `<div style="transform rotate(-${bearing}deg) position: absolute; top: -20px; left: -16px; width: 64px; text-align: center; font-size: 12px; color: #000;">${entity.routeShortName || "?"}</div>`;
-
-    // Combine both pin and text into custom HTML content
+    // Constructing marker HTML content
     const customHtmlContent = `
-        <div style="position: absolute; display: inline-block;">
-            ${pinHtmlContent}<div style="transform: rotate(${bearing}deg);"></div>
-            
+        <div style="position: relative; font-size: 12px; text-align: center; width: 70px;">
+            <div style="position: relative; top: 78%; left: 78%; transform: translateX(-50%) rotate(${bearing}deg);">
+                <img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;">
+                <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate(-${bearing}deg); color: #${entity.routeTextColor};">
+                ${routeShortName}
+            </div>
+            </div>
         </div>
     `;
 
     const customIcon = L.divIcon({
         html: customHtmlContent,
-        iconSize: [32, 47], // Size of the icon
-        iconAnchor: [16, 47], // Ensures the pin points to the exact location
-        popupAnchor: [0, -47] // Adjust if necessary
+        iconSize: [70, 95], // Adjusted to contain both the pin and text
+        iconAnchor: [35, 47.5], // Centered anchor point
+        popupAnchor: [0, -47.5] // Adjust if necessary
     });
 
-    const marker = L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
-    marker.bindPopup(generatePopupContent(entity));
+    // Update or create a new marker
+    if (busMarkers[entity.vehicle.vehicle.label]) {
+        busMarkers[entity.vehicle.vehicle.label].setLatLng([latitude, longitude]).setIcon(customIcon);
+    } else {
+        busMarkers[entity.vehicle.vehicle.label] = L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
+        busMarkers[entity.vehicle.vehicle.label].bindPopup(generatePopupContent(entity));
+    }
 
-    // Attach click event if needed
-    marker.on('click', () => onBusMarkerClick(entity.routeId));
+    // Attach a click event if needed
+    busMarkers[entity.vehicle.vehicle.label].on('click', () => onBusMarkerClick(entity.routeId));
 
-    return marker; // Return the Leaflet marker instance
+    return busMarkers[entity.vehicle.vehicle.label]; // Return the Leaflet marker instance
 }
 
 
@@ -223,13 +215,26 @@ function generatePopupContent(entity) {
     }
 }
 
-
-
-function moveMarkerSmoothly(marker, newPosition) {
-    if (!marker || typeof marker.getLatLng !== 'function') {
-        console.error('Invalid marker passed to moveMarkerSmoothly.');
-        return;
+function generatePopupContent(entity) {
+    if (!entity || !entity.routeId) {
+        return 'Information unavailable';
     }
+    // Construct and return the HTML content string based on `entity`
+    return `
+        <div>Route Short Name: ${entity.routeShortName}</div>
+        <div>Route ID: ${entity.routeId}</div>
+         (vehicle ${entity.vehicle.vehicle.label})<br>
+                ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "N/A"}<br>
+                Route color: ${entity.routeColor || "N/A"}<br>Text color: ${entity.routeTextColor || "N/A"}<br>
+                Speed: ${Math.round(entity.vehicle.position.speed) || 0}
+    `;
+}
+
+
+
+
+// This function smoothly moves the marker and ensures the SVG icon is used
+function moveMarkerSmoothly(marker, newPosition, svgContent) {
     let currentLatLng = marker.getLatLng();
     let newLatLng = L.latLng(newPosition);
     let distance = currentLatLng.distanceTo(newLatLng);
@@ -242,6 +247,13 @@ function moveMarkerSmoothly(marker, newPosition) {
         if (i < steps) {
             i++;
             marker.setLatLng([currentLatLng.lat + (stepLat * i), currentLatLng.lng + (stepLng * i)]);
+            // Update the icon at each step with the SVG content
+            marker.setIcon(L.divIcon({
+                html: svgContent,
+                iconSize: [70, 95],
+                iconAnchor: [35, 47.5],
+                popupAnchor: [0, -47.5]
+            }));
         } else {
             clearInterval(interval);
             marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position

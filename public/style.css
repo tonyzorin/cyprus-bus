@@ -1,9 +1,30 @@
+body, html {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
+}
 #map {
-    height: 91vh; /* Use 100% of the viewport height */
-    width: 100vw; /* Use 100% of the viewport width */
-    position: absolute; /* Optional: Makes the map more responsive to screen size changes */
-    top: 0;
+    flex-grow: 1; /* Take up all available space */
+}
+.bottom-menu {
+    display: flex;
+    justify-content: space-around;
+    position: fixed;
+    bottom: 0;
     left: 0;
+    right: 0;
+    width: 100%;
+    height: 50px;
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+    color: white;
+    z-index: 1001;
+}
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 .tab-content {
     display: none;
@@ -11,23 +32,22 @@
     position: fixed;
     top: 0;
     left: -100vw;
-    width: 90vw;
+    width: 100vw;
     height: 100vh;
     z-index: 10; /* Ensure it's above the map but below the menu */
     transition: left 0.3s; /* Smooth transition for sliding in */
+    background-color: rgba(0, 0, 0, 0.7); /* Corrected semi-transparent black */
+    color: white;
 }
 .tab-content.active {
     /*display: block;*/
-    left: 0; /* Bring the active tab onscreen */
-}
+    left: 0;
+    background-color: #007bff; /* Example active color, adjust as needed */
+    color: white;
+    /* Bring the active tab onscreen */
 }
 .leaflet-popup-pane {
     z-index: 10;
-}
-body, html {
-    height: 100%; /* Ensure the body and html take the full height of the viewport */
-    margin: 0; /* Remove default margin */
-    padding: 0; /* Remove default padding */
 }
 h3 {
     position: absolute;
@@ -153,27 +173,7 @@ border-radius: 50%;
     -moz-animation: active 2s infinite linear;
     animation: active 3s infinite linear;
 }
-.menu-item.active {
-    background-color: #007bff; /* Example active color, adjust as needed */
-    color: white;
-}
-.menu-item {
-    background-color: rgba(0, 0, 0, 0.7); /* Corrected semi-transparent black */
-    color: white;
-}
-.bottom-menu {
-    display: flex;
-    justify-content: space-around;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 50px;
-    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
-    color: white;
-    z-index: 1001;
-}
+
 @media (max-width: 768px) {
     .bottom-menu {
         height: 40px; /* Adjust for mobile */

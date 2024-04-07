@@ -60,20 +60,26 @@
 </script>
 
 
-<div class="flex flex-col h-screen">
+
+<script src="./frontend.js"></script>
+<div class="container">
     <h3>Cyprus Bus on Map Live</h3>
     <div class="flex-1" id="map">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
+    </div>
+    <div class="bottom-menu">
+        <div class="tab-content">
+            <a href="#" class="tab-content.active">Map</a>
+            <button class="tab-content" data-target="timetables">Timetable (soon)</button>
+            <a href="stats.html" class="tab-content">Stats</a>
+            <a href="https://www.buymeacoffee.com/tonyzorin" class="tab-content">☕️ Buy Me a Coffee</a>
         </div>
     </div>
-    <div class="fixed inset-x-0 bottom-0 bg-gray-200 p-4">
-        <script src="./frontend.js"></script>
-        <div class="bg-white rounded-lg shadow-lg">
-            <!-- Navigation tabs -->
+
+        <!--<div class="bg-white rounded-lg shadow-lg">
+            <!-- Navigation tabs
 
             <div class="menu-container bg-gray-200 p-4 flex justify-around fixed bottom-0 inset-x-0 z-20">
-                <!-- Updated Map button with Tailwind CSS classes for full width, blue background, and white text -->
+                <!-- Updated Map button with Tailwind CSS classes for full width, blue background, and white text
                 <a href="#" class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target="main">Map</a>
                 <button class="tab-button" data-target="timetables">Timetable(soon)</button>
                 <a href="stats.html" class="tab-button" data-target="stats">Stats</a>
@@ -95,8 +101,8 @@
                     <button class="bg-gray-200 rounded-lg p-2">Nicosia</button>
                     <button class="bg-gray-200 rounded-lg p-2">Limassol</button>
                 </div>
-            </div>-->
-        </div>
+            </div>
+        </div>-->
     </div>
 </div>
 
@@ -114,3 +120,7 @@
 </script>
 </body>
 </html>
+
+
+
+
