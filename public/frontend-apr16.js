@@ -1,10 +1,32 @@
+//1. Click on bus stop icon doesn't show routes and shapes
+//2. Click on the bus icon doesn't show a pop-up with relevant info
+//3. Bus pin shows bad font
+//4. Bus pin rotated but shifted off the road
+//5. Bus pin after updated rotates the text
+//6. User location to be updated every 3 seconds
+
+//7. If user's coordinate are not from Cyprus, show Cyprus coordinates with some zoom out
+//7. Bus stops not ot be on top of everything
+
+//7. Add airports
+//8. Add bus stops for Intercity with specific pins
+//9. Add pins fo RideNow
+//10. Add bus stops for all regions
+//11. Select a region for bus stops
+//12
+
+
 const LOGGING_ENABLED = 1; // Set to 0 to disable logging
+//const refreshInterval = process.env.NODE_ENV === 'dev' ? 20000 : 5000;
+
 document.addEventListener('DOMContentLoaded', function () {
     initMap();
+    fetchStops();
 });
 
 let map; // Declare map variable at the top level for global access
 let busMarkers = {}; // Array to store references to bus markers
+let busStopMarkers = {};  // Define this at a global level
 let currentRoutePolyline = null; // This will store the current route polyline
 
 async function initMap() {
@@ -25,7 +47,9 @@ async function initMap() {
     await fetchStops();
     fetchBusPositions();
     showUserPosition();
-    setInterval(fetchBusPositions, 5000); // Refresh bus positions every 10 seconds
+    //setInterval(fetchBusPositions, refreshInterval);
+    setInterval(fetchBusPositions, 20000);
+
 }
 
 var userIcon = L.icon({
@@ -42,63 +66,81 @@ var busStopIcon = L.icon({
     popupAnchor: [0, -28]
 });
 
-function fetchStops() {
-    fetch('/api/stops')
-        .then(response => response.json())
-        .then(stops => {
-            console.log(stops); // Log the stops data for debugging
-            stops.forEach(stop => {
-                L.marker([stop.lat, stop.lon], {icon: busStopIcon, zIndexOffset: 2}).addTo(map)
-                    .bindPopup(`<b>${stop.name}</b>`);
-            });
-        })
-        .catch(error => console.error('Error fetching stops:', error));
-}
-
-
-async function fetchOrCreatePin(routeShortName, routeColor, routeTextColor) {
-    // Defaulting to pin0.png and "?" for unknown routes
-    const isUnknownRoute = routeShortName === "Unknown" || !routeShortName || routeColor === "Unknown" || !routeColor;
-    const pinImagePath = routeColor === "Unknown" ? './images/pins/pin0.png' : `./images/pins/${routeColor}.png`;
-    const displayText = routeShortName === "Unknown" ? "?" : routeShortName;
-
-    let pinImage = new Image();
-    pinImage.src = pinImagePath;
-
+async function fetchStops() {
     try {
-        await pinImage.decode();
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 32;
-        canvas.height = 47;
-
-        ctx.drawImage(pinImage, 0, 0, 32, 47);
-        ctx.fillStyle = `#${routeTextColor}`;
-        ctx.font = 'bold 12px Arial';
-        ctx.textAlign = 'center';
-        const textX = canvas.width / 2;
-        const textY = canvas.height / 2.5;
-        ctx.fillText(displayText, textX, textY);
-
-        const iconUrl = canvas.toDataURL('image/png');
-        return L.icon({
-            iconUrl: iconUrl,
-            iconSize: [canvas.width, canvas.height],
-            iconAnchor: [canvas.width / 2, canvas.height],
-            popupAnchor: [0, -canvas.height / 2]
+        const response = await fetch('/api/stops');
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const stops = await response.json();
+        stops.forEach(stop => {
+            const marker = L.marker([stop.lat, stop.lon], {icon: busStopIcon}).addTo(map);
+            marker.stopId = stop.id;  // Ensure stop.id is the correct property
+            // Ensure stop.id or the correct property that contains the stop ID is used here
+            marker.on('click', () => displayRoutesForStop(marker.stopId));
         });
     } catch (error) {
-        console.error('Error creating custom pin:', error);
-        return L.icon({
-            iconUrl: './images/pins/pin0.png', // Fallback for any error
-            iconSize: [32, 47],
-            iconAnchor: [16, 47],
-            popupAnchor: [0, -47]
-        });
+        console.error('Error fetching stops:', error);
     }
 }
 
+async function displayRoutesForStop(stopId) {
+    try {
+        const response = await fetch(`/api/routes-for-stop/${stopId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const routes = await response.json();
+        const routesInfo = routes.map(route => `Route ${route.route_short_name}`).join(", ");
+
+        const popupContent = `<b>Routes at this stop:</b><br>${routesInfo}`;
+        const stopMarker = busStopMarkers[stopId];
+        if (stopMarker) {
+            stopMarker.bindPopup(popupContent).openPopup();
+        }
+
+        routes.forEach(route => {
+            displayRouteShape(route.routeId, route.route_color);
+        });
+    } catch (error) {
+        console.error('Error fetching routes for stop:', error);
+        // Handle cases where the error is due to non-JSON response
+        if (!(error instanceof SyntaxError)) {
+            alert(`Error fetching routes for stop: ${error.message}`);
+        }
+    }
+}
+
+
+function displayRouteShape(routeId, color) {
+    fetch(`/api/route-shapes/${routeId}`)
+        .then(response => response.json())
+        .then(shapePoints => {
+            const latLngs = shapePoints.map(point => [point.shape_pt_lat, point.shape_pt_lon]);
+            const polyline = L.polyline(latLngs, { color: `#${color}`, weight: 5 }).addTo(map);
+            currentRoutePolyline.push(polyline); // Store polyline to manage later
+        });
+}
+
+
+
+
+function generatePopupContent(entity) {
+    if (!entity || !entity.routeId) {
+        return 'Information unavailable';
+    }
+    // Construct and return the HTML content string based on `entity`
+    return `
+        <div>Route Short Name: ${entity.routeShortName}</div>
+        <div>Route ID: ${entity.routeId}</div>
+        <div>Vehicle: ${entity.vehicle.vehicle.label}</div>
+        <div>${entity.routeLongName}</div>
+        <div>Bearing: ${entity.vehicle.position.bearing || "N/A"}</div>
+        <div>Route color: ${entity.routeColor || "N/A"}</div>
+        <div>Text color: ${entity.routeTextColor || "N/A"}</div>
+        <div>Speed: ${Math.round(entity.vehicle.position.speed) || 0}</div>
+    `;
+}
 
 async function fetchBusPositions() {
     try {
@@ -107,12 +149,25 @@ async function fetchBusPositions() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
+
+        // Clear previous error messages
+        document.getElementById("error-message").textContent = "";
+
+        // Check for specific error message from backend
+        if (data.error && data.error === "GTFS data is currently not available. Please try again later.") {
+            document.getElementById("error-message").textContent = "🛑 Error on getting buses positions from Motion. 🤷‍♂️";
+            return; // Stop further processing
+        }
+
         await processVehiclePositions(data);
-        //cleanupMarkers(activeVehicleLabels); // Ensure this is correctly passed
     } catch (error) {
         console.error('Error fetching vehicle positions:', error);
+        // Update the UI to show a generic error message
+        document.getElementById("error-message").textContent = "🛑 Error on getting buses positions from Motion. 🤷‍♂️";
     }
 }
+
+
 
 
 async function processVehiclePositions(data) {
@@ -177,6 +232,56 @@ function cleanupMarkers(activeVehicleLabels) {
     });
 }
 
+/**
+ * Creates or fetches a pin icon for a bus marker.
+ * @param {string} routeShortName - Short name of the route.
+ * @param {string} routeColor - Background color of the pin.
+ * @param {string} textColor - Color of the text on the pin.
+ * @returns {L.Icon} - Leaflet icon object.
+ */
+async function fetchOrCreatePin(routeShortName, routeColor, textColor, bearing = 0) {
+    routeColor = routeColor.startsWith('#') ? routeColor : `#${routeColor}`;
+    textColor = textColor.startsWith('#') ? textColor : `#${textColor}`;
+
+    // SVG content with separated rotation for the icon and counter-rotation for the text
+    const svgContent = `
+        <svg width="30" height="48" viewBox="0 0 30 48" xmlns="http://www.w3.org/2000/svg">
+            <g transform="rotate(${bearing}, 15, 24)">
+                <path d="M15 0C6.716 0 0 6.716 0 15C0 30 15 48 15 48C15 48 30 30 30 15C30 6.716 23.284 0 15 0Z" fill="${routeColor}"/>
+            </g>
+            <g transform="rotate(${-bearing}, 15, 34)">
+                <text x="15" y="34" text-anchor="middle" style="fill: ${textColor}; font-size: 12px; font-family: Arial, sans-serif;">
+                    ${routeShortName}
+                </text>
+            </g>
+        </svg>
+    `;
+
+    const encodedSvg = encodeURIComponent(svgContent);
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
+
+    return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [30, 48],
+        iconAnchor: [15, 48],
+        popupAnchor: [0, -48]
+    });
+}
+async function extractMarkerData(entity) {
+    const routeShortName = entity.routeShortName || "Unknown";
+    const latitude = entity.vehicle.position.latitude;
+    const longitude = entity.vehicle.position.longitude;
+    const bearing = entity.vehicle.position.bearing || 0; // Get the bearing from vehicle data
+    const vehicleLabel = entity.vehicle.vehicle.label || "N/A";
+    const routeColor = entity.routeColor || "#000000";
+    const textColor = entity.routeTextColor || "#ffffff";
+
+    const markerIcon = await fetchOrCreatePin(routeShortName, routeColor, textColor, bearing);
+
+    return { latitude, longitude, markerIcon, vehicleLabel: entity.vehicle.vehicle.label };
+}
+
+
 
 async function createNewMarker(latitude, longitude, markerIcon, entity) {
     const bearing = entity.vehicle.position.bearing || 0; // Use 0 as default if undefined
@@ -206,23 +311,10 @@ async function createNewMarker(latitude, longitude, markerIcon, entity) {
     marker.bindPopup(generatePopupContent(entity));
 
     // Attach click event if needed
-    marker.on('click', () => onBusMarkerClick(entity.routeId));
+    marker.on('click', () => displayRouteShape(entity.routeId));
 
     return marker; // Return the Leaflet marker instance
 }
-
-
-function generatePopupContent(entity) {
-    if (entity.routeId === "Unknown" || !entity.routeId) {
-        return `Unknown Route<br>Route ID: Unknown<br>Route Short Name: ${entity.routeShortName || "N/A"}<br>Route Long Name: ${entity.routeLongName || "N/A"}`;
-    } else {
-        return `Bus <b>${entity.routeShortName}</b> (vehicle ${entity.vehicle.vehicle.label})<br>
-                ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "N/A"}<br>
-                Route color: ${entity.routeColor || "N/A"}<br>Text color: ${entity.routeTextColor || "N/A"}<br>
-                Speed: ${Math.round(entity.vehicle.position.speed) || 0}`;
-    }
-}
-
 
 
 function moveMarkerSmoothly(marker, newPosition) {
@@ -250,7 +342,7 @@ function moveMarkerSmoothly(marker, newPosition) {
 }
 
 
-function onBusMarkerClick(routeId) {
+function displayRouteShape(routeId) {
     // Check if the routeId is "Unknown" and exit early if so
     if (routeId === "") {
         console.warn("Route details are unknown. Cannot fetch route shapes.");

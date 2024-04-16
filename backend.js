@@ -1,24 +1,121 @@
+//const LOGGING_ENABLED = 1; // Set to 0 to disable logging
+const LOGGING_ENABLED = process.env.LOGGING_ENABLED === 'true';
+const dotenv = require('dotenv')
+require('dotenv').config();
 const backend = require('express');
 const axios = require('axios');
 const {connect: connect, query} = require('./database.js');
 const app = backend();
-const dotenv = require('dotenv')
-require('dotenv').config();
 const port = process.env.PORT || 3000;
 const {readPositionsJson} = require('./parseGTFS');
 const fs = require("fs");
-const env = "process.env.NODE_ENV" || 'dev'; // Defaulting to 'dev' if NODE_ENV is not set
+const env = process.env.NODE_ENV || 'dev'
 app.use(backend.static('./public'));
+
+
+/*function validateEnvVariables() {
+    const requiredEnv = [
+        'POSTGRES_USER',
+        'POSTGRES_HOST',
+        'POSTGRES_DB',
+        'POSTGRES_PASSWORD',
+    ];
+
+    const missingEnv = requiredEnv.filter(envKey => !process.env[envKey]);
+
+    if (missingEnv.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
+    }
+
+    // Additional validation to ensure environment variables have valid formats
+    // For example, checking if the HOST is a valid URL or IP
+    // This is optional and can be tailored based on specific requirements
+    if (!/^[\w.-]+$/.test(process.env.POSTGRES_USER)) {
+        throw new Error('Invalid format for POSTGRES_USER');
+    }
+    if (!/^[\w.-]+(\.[\w.-]+)+$/.test(process.env.POSTGRES_HOST)) {
+        throw new Error('Invalid format for POSTGRES_HOST');
+    }
+    if (!process.env.POSTGRES_PASSWORD) { // Additional specific checks can be added
+        throw new Error('POSTGRES_PASSWORD cannot be empty');
+    }
+}
+
+ */
+
+// Call the validation function at the start of your application
+/*try {
+    validateEnvVariables();
+    console.log('Environment variables validation passed.');
+} catch (error) {
+    console.error(`Environment variables validation failed: ${error.message}`);
+    process.exit(1); // Exit the application if the environment variables are not set correctly
+}
+*/
+function sendTelegramAlert(message) {
+    const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const params = {
+        chat_id: process.env.CHAT_ID,
+        text: message,
+    };
+
+    axios.post(url, params)
+        .then((response) => {
+            console.log("Message sent to Telegram successfully:", response.data);
+        })
+        .catch((error) => {
+            console.error("Failed to send message to Telegram:", error);
+        });
+}
+
+
 
 app.get('/', (req, res) => res.send('Hello World!'));
 
 app.get('/api/stops', async (req, res) => {
     try {
         const result = await query('SELECT * FROM stops');
+        if (!result.rows) throw new Error('No data found');
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching stops:', err);
-        res.status(500).json({ error: 'Internal server error fetching stops' });
+        console.error('Error fetching stops:', err.message);
+        res.status(500).json({ error: 'Internal server error fetching stops', details: err.message });
+    }
+});
+
+
+app.get('/api/routes-for-stop/:stopId', async (req, res) => {
+    const { stop_id } = req.params;
+    try {
+        const queryText = `
+            SELECT DISTINCT
+                routes."routeId",
+                routes.agency_id,
+                routes.route_short_name,
+                routes.route_long_name,
+                routes.route_desc,
+                routes.route_type,
+                routes.route_color,
+                routes.route_text_color
+            FROM
+                routes
+                    JOIN
+                trips ON routes."routeId" = trips."routeId"
+                    JOIN
+                stop_times ON trips."tripId" = stop_times.trip_id
+                    JOIN
+                stops ON stop_times.stop_id = stops.stop_id
+            WHERE
+                stops.stop_id =  $1
+        `;
+
+        // Assuming `query` is a function that executes a SQL query against your database
+        // and returns a Promise that resolves with the query result.
+        const routes = await query(queryText, [stop_id]);
+        res.json(routes.rows); // Send the resulting routes as a JSON response
+    } catch (error) {
+        console.error('Failed to fetch routes for stop:', error);
+        res.status(500).send('Failed to fetch routes for stop');
     }
 });
 
@@ -74,9 +171,9 @@ app.get('/api/vehicle-positions', async (req, res) => {
                 // Assuming you want to return a default structure if route details are not found
                 return {
                     ...position,
-                    routeShortName: "# Unknown",
+                    routeShortName: "?",
                     routeLongName: "Unknown Route",
-                    routeId: "Unknown routeId",
+                    routeId: "0",
                     routeColor: "000000", // Default to black
                     routeTextColor: "FFFFFF", // Default to white
                     bearing: bearing || 0,
@@ -88,7 +185,12 @@ app.get('/api/vehicle-positions', async (req, res) => {
         res.json(augmentedPositions.filter(position => position !== null));
     } catch (error) {
         console.error('Failed to fetch vehicle positions:', error);
-        res.status(500).send('Failed to fetch vehicle positions');
+        // Check if the error message indicates GTFS data fetch failure
+        if (error.message.includes('Failed to fetch GTFS data')) {
+            res.status(503).send('The GTFS server is not available. Please try again later.');
+        } else {
+            res.status(500).send('Failed to fetch vehicle positions');
+        }
     }
 });
 
