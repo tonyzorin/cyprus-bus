@@ -21,6 +21,24 @@ body, html {
     color: white;
     z-index: 1001;
 }
+
+.bottom-menu {
+    position: fixed;       /* Fixed position to keep it at the bottom */
+    bottom: 0;             /* Aligns to the bottom */
+    left: 0;               /* Spans from the left edge */
+    right: 0;              /* Spans to the right edge */
+    background-color: #fff; /* Light background for the menu */
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1); /* Subtle shadow for a floating effect */
+    z-index: 100;          /* Ensures it is above other content */
+    text-align: center;    /* Centers the content within */
+}
+
+.tab-content {
+    display: inline-block; /* Inline-block for horizontal alignment */
+    padding: 10px 15px;    /* Padding for spacing */
+    text-decoration: none; /* Removes underline from links */
+}
+
 .container {
     display: flex;
     flex-direction: column;

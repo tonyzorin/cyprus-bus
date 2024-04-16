@@ -24,7 +24,13 @@ function readPositionsJson() {
                 let FeedMessage = root.lookupType("transit_realtime.FeedMessage");
 
                 fetch(gtfsRealtimeUrl)
-                    .then(response => response.arrayBuffer())
+                    .then(response => {
+                        // Check if the response status is 500
+                        if (response.status === 500) {
+                            throw new Error('GTFS data is currently not available. Please try again later.');
+                        }
+                        return response.arrayBuffer();
+                    })
                     .then(arrayBuffer => {
                         const buffer = Buffer.from(arrayBuffer);
                         let message = FeedMessage.decode(buffer);
@@ -42,10 +48,14 @@ function readPositionsJson() {
                         cache.data = object;
                         resolve(object); // Resolve the promise with the decoded JSON object
                     })
-                    .catch(error => reject(error));
+                    .catch(error => {
+                        console.error(error.message || 'Failed to fetch GTFS data.');
+                        reject(error);
+                    });
             });
         });
     }
 }
+
 
 module.exports = { readPositionsJson };
