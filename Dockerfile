@@ -1,8 +1,5 @@
 # syntax=docker/dockerfile:1
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/engine/reference/builder/
 # Use the official Node.js 16 image
 FROM node:16
 
@@ -14,7 +11,9 @@ WORKDIR /usr/src/app
 # Ensure you have these files in your Node.js app directory; if not, you'll need to initialize your Node project with `npm init`
 COPY package*.json ./
 
-RUN npm install
+# Install dependencies including doting
+RUN npm install doting
+
 # Update `uuid` and remove `request` in favor of `axios`
 
 # Fix vulnerabilities
@@ -28,7 +27,5 @@ EXPOSE 3000
 
 CMD [ "node", "backend.js" ]
 
-
-
 # Use production node environment by default.
-# ENV NODE_ENV production
+ENV NODE_ENV production
