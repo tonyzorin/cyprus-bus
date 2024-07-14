@@ -16,6 +16,8 @@ services:
       - my_network
     environment:
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_DATABASE}
+      - NODE_ENV=development
+
 
   postgres:
     image: postgres:15
@@ -27,7 +29,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
     networks:
       - my_network
 
