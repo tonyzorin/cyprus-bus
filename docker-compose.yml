@@ -1,33 +1,38 @@
-version: '3.1'
 services:
   nodejs-app:
-    build: .
+    build:
+      context: .
+      args:
+        - DB_DATABASE
+        - DB_HOST
+        - DB_PASSWORD
+        - DB_USER
     volumes:
       - .:/usr/src/app
       - ./public:/usr/src/app/public
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./caddy_data:/data
-      - ./caddy_config:/config
     ports:
       - "3000:3000"
     networks:
       - my_network
-  caddy:
-    image: caddy:2.7.6
-    container_name: caddy
-    hostname: caddy
-    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_DATABASE}
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     ports:
-      - "443:443"
-   # env_file:
-   #   - ./.env
-    tty: true
-    depends_on:
-      - nodejs-app
+      - "5433:5432"
     networks:
       - my_network
-volumes:
-  caddy_data:
-  caddy_config:
+
 networks:
   my_network:
+
+volumes:
+  pgdata:

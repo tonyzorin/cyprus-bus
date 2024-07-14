@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cyprus Buses Live</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="./style.css" />
+    <title>Cyprus Buses on Map</title>
+
+    <link rel="stylesheet" href="./css/leaflet.css" />
+    <link rel="stylesheet" href="./css/style.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <script>
@@ -11,30 +12,29 @@
         posthog.init('phc_7JBpU7pfJomlCDgtNh0GgygKClYpYU52HOBX36qZRZx',{api_host:'https://eu.posthog.com'})
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/v2/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
+    <script src="leaflet.js"></script>
+    <script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
     <script>
-        ProdCamp('initFeedbackWidget', {
-            email: 'anonymous@feedback.wow'
-        });
+        ProdCamp('initFeedbackWidget');
     </script>
 </head>
 <body>
+<header>
+    <div id="gtfs-status">Checking GTFS feed status...</div>
+</header>
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        // Show the tab when its button is clicked
-        document.querySelectorAll(".tab-button").forEach(button => {
-            button.addEventListener("click", function() {
-                const targetId = this.getAttribute("data-target");
-                const targetTab = document.getElementById(targetId);
-                targetTab.classList.remove("hidden"); // Assuming you're using TailwindCSS for hiding
-            });
-        });
+    document.addEventListener('DOMContentLoaded', () => {
+        // Get all buttons with the class 'tab-button'
+        const buttons = document.querySelectorAll('.tab-button');
 
-        // Optionally: Close the tab when the "Close" button is clicked
-        document.querySelectorAll(".close-tab").forEach(button => {
-            button.addEventListener("click", function() {
-                this.parentElement.classList.add("hidden");
+        // Add event listener to each button
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Get the target URL from the data-target attribute
+                const target = button.getAttribute('data-target');
+
+                // Redirect to the target URL
+                window.location.href = target;
             });
         });
     });
@@ -61,27 +61,26 @@
 </script>
 
 
-
 <script src="./frontend.js"></script>
-<div class="flex flex-col h-screen">
     <h3><div id="error-message" style="display: none; color: red;"></div></h3>
     <div class="flex-1" id="map">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         </div>
     </div>
-    <div class="fixed inset-x-0 bottom-0 bg-gray-200 p-4">
-        <script src="./frontend.js"></script>
         <div class="bg-white rounded-lg shadow-lg">
             <!-- Navigation tabs -->
 
             <div class="menu-container bg-gray-200 p-4 flex justify-around fixed bottom-0 inset-x-0 z-20">
                 <!-- Updated Map button with Tailwind CSS classes for full width, blue background, and white text -->
-                <a href="#" class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target="main">Map</a>
-                <button class="tab-button" data-target="timetables">Timetable+Routes(soon)</button>
-                <a href="stats.html" class="tab-button" data-target="stats">Stats</a>
-                <a href="https://www.buymeacoffee.com/tonyzorin" class="tab-button" data-target="about">☕️ Buy Me a Coffee</a>
+                <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target=#>Map</button>
+                <button class="tab-button" data-target=#>Routes</button>
+                <button class="tab-button" data-target=#>Timetable</button>
+                <button class="tab-button" data-target="stats.html">Stats</button>
+                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">☕️Thanks</button>
             </div>
+
+
             <!-- Tabs Content --
             <div id="map" class="tab-content hidden">Map Content Here
                 <button class="bg-gray-200 rounded-lg p-2">Map</button>
@@ -100,8 +99,6 @@
                 </div>
             </div>-->
         </div>
-    </div>
-</div>
 
 <script>
     document.querySelectorAll('.tab-content').forEach(item => {
@@ -129,6 +126,7 @@
     });
 
 </script>
+
 </body>
 </html>
 
