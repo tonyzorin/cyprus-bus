@@ -1,8 +1,9 @@
 const protobuf = require("protobufjs");
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const protoPath = "gtfs-realtime.proto";
-const gtfsRealtimeUrl = "http://20.19.98.194:8328/Api/api/gtfs-realtime"
-
+const dotenv = require('dotenv')
+require('dotenv').config();
+const gtfsRealtimeUrl = process.env.GTFS_KEY;
 // Cache implementation
 let cache = {
     timestamp: 0,
@@ -59,3 +60,5 @@ function readPositionsJson() {
 
 
 module.exports = { readPositionsJson };
+
+readPositionsJson();

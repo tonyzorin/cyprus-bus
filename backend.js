@@ -12,6 +12,29 @@ const fs = require("fs");
 const env = process.env.NODE_ENV || 'dev'
 app.use(backend.static('./public'));
 
+let lastUpdateTime = null;
+let gtfsStatus = 'Checking GTFS feed status...';
+
+async function checkGTFSFeed() {
+    try {
+        const response = await axios.get(process.env.GTFS_KEY);
+        if (response.status === 200) {
+            lastUpdateTime = new Date().toLocaleString(); // Update the last update time
+            gtfsStatus = `available`;
+        } else {
+            gtfsStatus = 'unavailable';
+            lastUpdateTime = null;
+        }
+    } catch (error) {
+        gtfsStatus = 'GTFS Feed: Unavailable';
+        lastUpdateTime = null;
+    }
+}
+
+app.get('/api/gtfs-status', async (req, res) => {
+    await checkGTFSFeed();
+    res.json({ gtfsStatus, lastUpdateTime });
+});
 
 /*function validateEnvVariables() {
     const requiredEnv = [
@@ -70,7 +93,11 @@ function sendTelegramAlert(message) {
 
 
 
-app.get('/', (req, res) => res.send('Hello World!'));
+
+app.get('/', async (req, res) => {
+    await checkGTFSFeed(); // Ensure status is checked before rendering
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.get('/api/stops', async (req, res) => {
     try {

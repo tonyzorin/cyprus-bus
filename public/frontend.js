@@ -1,6 +1,7 @@
-const LOGGING_ENABLED = 1; // Set to 0 to disable logging
 document.addEventListener('DOMContentLoaded', function () {
     initMap();
+    fetchGTFSStatus();
+    setInterval(fetchGTFSStatus, 5000);
 });
 
 let map; // Declare map variable at the top level for global access
@@ -18,11 +19,7 @@ async function initMap() {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
-
-        // Add a new attribution control at the top right ("topright")
-        L.control.attribution({position: 'topright'}).addTo(map);
     }
-    await fetchStops();
     fetchBusPositions();
     showUserPosition();
     setInterval(fetchBusPositions, 3000); // Refresh bus positions every 10 seconds
@@ -42,6 +39,40 @@ var busStopIcon = L.icon({
     popupAnchor: [0, -28]
 });
 
+async function fetchGTFSStatus() {
+    try {
+        const response = await fetch('/api/gtfs-status');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const status = await response.json();
+        console.log('GTFS status fetched:', status); // Log fetched status
+        updateGTFSStatusUI(status);
+    } catch (error) {
+        console.error('Error fetching GTFS status:', error);
+        updateGTFSStatusUI({gtfsStatus: 'unavailable', lastUpdateTime: null});
+    }
+}
+
+function updateGTFSStatusUI(status) {
+    const statusElement = document.getElementById('gtfs-status'); // Get the DOM element that displays the GTFS status.
+    if (!statusElement) {
+        console.error('Element with ID "gtfs-status" not found');
+        return;
+    }
+
+    let customMessage;
+    if (status.gtfsStatus.toLowerCase() === 'available') {
+        customMessage = `Status ✅, Updated: ${status.lastUpdateTime})`;
+        statusElement.style.color = 'green'; // Set the color to green if the status is "available"
+    } else {
+        customMessage = 'Status ❌ Data from Motion is not available.';
+        statusElement.style.color = 'red'; // Set the color to red otherwise
+    }
+
+    statusElement.innerHTML = customMessage; // Set the inner HTML of the status element to the custom message
+}
+
 function fetchStops() {
     fetch('/api/stops')
         .then(response => response.json())
@@ -56,7 +87,6 @@ function fetchStops() {
 }
 
 async function fetchOrCreatePin(routeShortName, routeColor, routeTextColor) {
-    // Ensure color format is correct (add '#' if missing)
     const displayText = routeShortName === "?" ? "?" : routeShortName;
     routeColor = routeColor.startsWith('#') ? routeColor : `#${routeColor}`;
     routeTextColor = routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor}`;
@@ -65,30 +95,46 @@ async function fetchOrCreatePin(routeShortName, routeColor, routeTextColor) {
     const svgContent = `
    <svg width="70" height="95" viewBox="0 0 70 95" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M34.9556 94.6442C34.0638 94.651 33.1921 94.3771 32.462 93.8607C31.7319 93.3443 31.1797 92.6112 30.8825 91.7634C26.3231 79.0907 9.31643 60.1199 9.13405 59.9207L9.02766 59.7828C4.49113 54.7241 1.50766 48.4471 0.43903 41.7129C-0.629603 34.9786 0.262503 28.0764 3.00718 21.8431C5.75186 15.6099 10.2312 10.3135 15.902 6.59609C21.5729 2.87869 28.1916 0.900024 34.9556 0.900024C41.7195 0.900024 48.3383 2.87869 54.0091 6.59609C59.6799 10.3135 64.1593 15.6099 66.9039 21.8431C69.6486 28.0764 70.5407 34.9786 69.4721 41.7129C68.4035 48.4471 65.42 54.7241 60.8834 59.7828L60.7771 59.9207C60.5947 60.1199 43.588 79.0907 39.0286 91.7634C38.7333 92.6124 38.1817 93.3469 37.4511 93.8636C36.7206 94.3803 35.8479 94.6533 34.9556 94.6442Z" fill="${routeColor}"/>
-    <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;">${routeShortName}</text>
-</svg>
-    `;
+    <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;">${routeShortName}</text
+    ></svg>`;
+    /*   const svgContent = `
+      <svg width="70" height="95" viewBox="0 0 70 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+       <path d="M34.9556 94.6442C34.0638 94.651 33.1921 94.3771 32.462 93.8607C31.7319 93.3443 31.1797 92.6112 30.8825 91.7634C26.3231 79.0907 9.31643 60.1199 9.13405 59.9207L9.02766 59.7828C4.49113 54.7241 1.50766 48.4471 0.43903 41.7129C-0.629603 34.9786 0.262503 28.0764 3.00718 21.8431C5.75186 15.6099 10.2312 10.3135 15.902 6.59609C21.5729 2.87869 28.1916 0.900024 34.9556 0.900024C41.7195 0.900024 48.3383 2.87869 54.0091 6.59609C59.6799 10.3135 64.1593 15.6099 66.9039 21.8431C69.6486 28.0764 70.5407 34.9786 69.4721 41.7129C68.4035 48.4471 65.42 54.7241 60.8834 59.7828L60.7771 59.9207C60.5947 60.1199 43.588 79.0907 39.0286 91.7634C38.7333 92.6124 38.1817 93.3469 37.4511 93.8636C36.7206 94.3803 35.8479 94.6533 34.9556 94.6442Z" fill="${routeColor}"/>
+       <g transform="rotate(${entity.vehicle.position.bearing}, 25, 25)">
+       <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;" transform="rotate(${entity.vehicle.position.bearing}, 25, 25)">>${routeShortName}</text
+       ></svg>`;*/
 
     const encodedSvg = encodeURIComponent(svgContent);
     const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
 
     return L.icon({
         iconUrl: iconUrl,
-        iconSize: [32, 47],
-        iconAnchor: [16, 47],
-        popupAnchor: [0, -47]
+        // iconSize: [32, 47],
+        // iconAnchor: [16, 47],
+        // popupAnchor: [0, -47]
     });
 }
 
 // Assuming busStopMarkers is a global object storing markers keyed by stop_id
-let busStopMarkers = {};
-let routePolylines = []; // Stores references to route shape polylines
 
 
 function clearRouteShapes() {
     routePolylines.forEach(polyline => polyline.remove());
     routePolylines = [];
 }
+
+
+function displayRouteShape(routeId) {
+    fetch(`/api/route-shapes/${routeId}`)
+        .then(response => response.json())
+        .then(shapePoints => {
+            const latLngs = shapePoints.map(point => [point.shape_pt_lat, point.shape_pt_lon]);
+            const polyline = L.polyline(latLngs, {color: 'blue', weight: 3}).addTo(map);
+            routePolylines.push(polyline); // Store reference to remove later
+        })
+        .catch(error => console.error(`Error fetching shape for route ${routeId}:`, error));
+}
+
 
 function fetchAndDisplayRoutesAndShapesForStop(stop_id) {
     clearRouteShapes(); // Clear existing route shapes
@@ -113,23 +159,53 @@ function fetchAndDisplayRoutesAndShapesForStop(stop_id) {
         .catch(error => console.error('Error fetching routes for stop:', error));
 }
 
-function displayRouteShape(routeId) {
-    fetch(`/api/route-shapes/${routeId}`)
-        .then(response => response.json())
-        .then(shapePoints => {
-            const latLngs = shapePoints.map(point => [point.shape_pt_lat, point.shape_pt_lon]);
-            const polyline = L.polyline(latLngs, { color: 'blue', weight: 3 }).addTo(map);
-            routePolylines.push(polyline); // Store reference to remove later
-        })
-        .catch(error => console.error(`Error fetching shape for route ${routeId}:`, error));
+// Make sure to call fetchStops() to initialize the process.
+//fetchStops();
+
+/*
+    let busStopsLayer;
+
+    // Function to load bus stops around the current position
+    async function fetchStops() {
+    if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+    const {latitude, longitude} = position.coords;
+
+    // Fetch bus stops
+    const busStops = await fetchBusStops(latitude, longitude);
+
+    // Remove existing bus stops layer if it exists
+    if (busStopsLayer) {
+    map.removeLayer(busStopsLayer);
 }
 
-// Make sure to call fetchStops() to initialize the process.
-fetchStops();
+    // Create a new layer for bus stops
+    busStopsLayer = L.layerGroup();
+
+    busStops.forEach(stop => {
+    const marker = L.marker([stop.lat, stop.lon])
+    .bindPopup(`<b>${stop.name}</b>`);
+    busStopsLayer.addLayer(marker);
+});
+
+    // Add bus stops layer to the map
+    busStopsLayer.addTo(map);
+
+    // Center map on the current position
+    map.setView([latitude, longitude], 14);
+});
+} else {
+    alert('Geolocation is not supported by this browser.');
+}
+}
+
+    // Event listener for the toggle button
+    document.querySelector('.toggle-button').addEventListener('click', loadBusStops);
+    */
 
 
 async function processVehiclePositions(data) {
-    const activeVehicleLabels = new Set(); // Track active vehicles
+    const activeVehicleLabels = new Set();
 
     for (const entity of data) {
         const {latitude, longitude, markerIcon, vehicleLabel} = await extractMarkerData(entity);
@@ -137,35 +213,11 @@ async function processVehiclePositions(data) {
 
         if (busMarkers[vehicleLabel]) {
             moveMarkerSmoothly(busMarkers[vehicleLabel], [latitude, longitude]);
-
-            // Update the icon with new bearing
-            const bearing = entity.vehicle.position.bearing+180 || 0; // Default to 0 if undefined
-            const customHtmlContent = `
-            <div style="position: relative; font-size: 12px; text-align: center; width: 70px;">
-                <div style="position: relative; top: 78%; left: 60%; transform: translateX(-100%) rotate(${bearing}deg);">
-                    <img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;">
-                        <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate(-${bearing}deg); color: ${entity.routeTextColor};">
-                            ${entity.routeShortName}
-                        </div>
-                </div>
-            </div>`;
-            const customIcon = L.divIcon({
-                html: svgContent,
-                iconSize: [32, 47],
-                iconAnchor: [16, 23.5], // Adjust as necessary
-                popupAnchor: [0, -23.5] // Adjust as necessary
-            });
-
-            busMarkers[vehicleLabel].setIcon(customIcon);
-        }
-        else {
-            // If marker doesn't exist, create a new one
+        } else {
             busMarkers[vehicleLabel] = await createNewMarker(latitude, longitude, markerIcon, entity);
         }
-
     }
 
-    // Now cleanup markers for vehicles no longer present
     cleanupMarkers(activeVehicleLabels);
 }
 
@@ -205,7 +257,7 @@ async function extractMarkerData(entity) {
     const routeTextColor = entity.routeTextColor.startsWith('#') ? entity.routeTextColor : `#${entity.routeTextColor}`;// Wait for the icon to be fetched/created
     const markerIcon = await fetchOrCreatePin(routeShortName, entity.routeColor, entity.routeTextColor);
 
-    return { latitude, longitude, markerIcon, vehicleLabel: entity.vehicle.vehicle.label };
+    return {latitude, longitude, markerIcon, vehicleLabel: entity.vehicle.vehicle.label};
 }
 
 function cleanupMarkers(activeVehicleLabels) {
@@ -231,10 +283,10 @@ async function createNewMarker(latitude, longitude, markerIcon, entity) {
 
     // Constructing marker HTML content
     const customHtmlContent = `
-        <div style="position: relative; font-size: 12px; text-align: center; width: 70px;">
+        <div style="position: absolute; font-size: 12px; text-align: center; width: 70px; ">
             <div style="position: relative; top: 78%; left: 78%; transform: translateX(-50%) rotate(${bearing}deg);">
                 <img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;">
-                <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate(-${bearing}deg); color: #${entity.routeTextColor};">
+                <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate((180-${bearing})deg); color: #${entity.routeTextColor};">
                 ${routeShortName}
             </div>
             </div>
@@ -252,7 +304,7 @@ async function createNewMarker(latitude, longitude, markerIcon, entity) {
     if (busMarkers[entity.vehicle.vehicle.label]) {
         busMarkers[entity.vehicle.vehicle.label].setLatLng([latitude, longitude]).setIcon(customIcon);
     } else {
-        busMarkers[entity.vehicle.vehicle.label] = L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
+        busMarkers[entity.vehicle.vehicle.label] = L.marker([latitude, longitude], {icon: customIcon}).addTo(map);
         busMarkers[entity.vehicle.vehicle.label].bindPopup(generatePopupContent(entity));
     }
 
@@ -269,55 +321,24 @@ function generatePopupContent(entity) {
     } else {
         return `Bus <b>${entity.routeShortName}</b> (vehicle ${entity.vehicle.vehicle.label})<br>
                 ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "N/A"}<br>
-                Route color: ${entity.routeColor || "N/A"}<br>Text color: ${entity.routeTextColor || "N/A"}<br>
                 Speed: ${Math.round(entity.vehicle.position.speed) || 0}`;
     }
 }
 
-function generatePopupContent(entity) {
-    if (!entity || !entity.routeId) {
-        return 'Information unavailable';
-    }
-    // Construct and return the HTML content string based on `entity`
-    return `
-        <div>Route Short Name: ${entity.routeShortName}</div>
-        <div>Route ID: ${entity.routeId}</div>
-         (vehicle ${entity.vehicle.vehicle.label})<br>
-                ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "N/A"}<br>
-                Route color: ${entity.routeColor || "N/A"}<br>Text color: ${entity.routeTextColor || "N/A"}<br>
-                Speed: ${Math.round(entity.vehicle.position.speed) || 0}
-    `;
-}
-
-
-
 
 // This function smoothly moves the marker and ensures the SVG icon is used
-function moveMarkerSmoothly(marker, newPosition, svgContent) {
-    let currentLatLng = marker.getLatLng();
-    let newLatLng = L.latLng(newPosition);
-    let distance = currentLatLng.distanceTo(newLatLng);
-    let steps = distance / 10; // Determine the number of steps based on distance
-    let stepLat = (newLatLng.lat - currentLatLng.lat) / steps;
-    let stepLng = (newLatLng.lng - currentLatLng.lng) / steps;
-
-    let i = 0;
+function moveMarkerSmoothly(marker, newPosition) {
+    let latlngs = [marker.getLatLng(), L.latLng(newPosition)];
+    let index = 0;
+    let steps = 10;
     let interval = setInterval(() => {
-        if (i < steps) {
-            i++;
-            marker.setLatLng([currentLatLng.lat + (stepLat * i), currentLatLng.lng + (stepLng * i)]);
-            // Update the icon at each step with the SVG content
-            marker.setIcon(L.divIcon({
-                html: svgContent,
-                iconSize: [70, 95],
-                iconAnchor: [35, 47.5],
-                popupAnchor: [0, -47.5]
-            }));
-        } else {
-            clearInterval(interval);
-            marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position
-        }
-    }, 20); // Adjust the interval time (in milliseconds) as needed for smoothness
+        index++;
+        let fraction = index / steps;
+        let lat = latlngs[0].lat + (latlngs[1].lat - latlngs[0].lat) * fraction;
+        let lng = latlngs[0].lng + (latlngs[1].lng - latlngs[0].lng) * fraction;
+        marker.setLatLng([lat, lng]);
+        if (index === steps) clearInterval(interval);
+    }, 50); // Adjust timing for smoother animation
 }
 
 
@@ -366,14 +387,14 @@ function onBusMarkerClick(routeId) {
 
 function showUserPosition() {
     if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(function(position) {
+        navigator.geolocation.getCurrentPosition(function (position) {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
 
             // Define custom HTML content that includes both the image and the beacon effect
             const customHtmlContent = `
                 <div class="custom-marker-container">
-                    <img src="images/current-location.png" alt="current location" class="user-icon on-top"/>
+                    <img src="images/current-location.png" alt="current location" class="user-icon on-top" style="z-index=1200"/>
                     <div class="beacon"></div> <!-- Beacon effect -->
                 </div>
             `;
@@ -390,7 +411,7 @@ function showUserPosition() {
 
             // Center the map on the user's location and adjust zoom level to 7
             map.setView([lat, lon], 16);
-        }, function(error) {
+        }, function (error) {
             console.error("Geolocation error:", error);
         }, {
             enableHighAccuracy: true,
