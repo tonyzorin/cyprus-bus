@@ -46,7 +46,6 @@ async function fetchGTFSStatus() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const status = await response.json();
-        console.log('GTFS status fetched:', status); // Log fetched status
         updateGTFSStatusUI(status);
     } catch (error) {
         console.error('Error fetching GTFS status:', error);
@@ -228,15 +227,6 @@ async function fetchBusPositions() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-
-        // Clear previous error messages
-        document.getElementById("error-message").textContent = "";
-
-        // Check for specific error message from backend
-        if (data.error && data.error === "GTFS data is currently not available. Please try again later.") {
-            document.getElementById("error-message").textContent = "🛑 Error on getting buses positions from Motion. 🤷‍";
-            return; // Stop further processing
-        }
 
         await processVehiclePositions(data);
     } catch (error) {

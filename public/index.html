@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Cyprus Buses on Map</title>
 
     <link rel="stylesheet" href="./css/leaflet.css" />
     <link rel="stylesheet" href="./css/style.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="./images/icons/favicon.ico">
     <script>
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
         posthog.init('phc_7JBpU7pfJomlCDgtNh0GgygKClYpYU52HOBX36qZRZx',{api_host:'https://eu.posthog.com'})
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="leaflet.js"></script>
+    <script src="./leaflet.js"></script>
     <script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
     <script>
         ProdCamp('initFeedbackWidget');
@@ -62,7 +62,6 @@
 
 
 <script src="./frontend.js"></script>
-    <h3><div id="error-message" style="display: none; color: red;"></div></h3>
     <div class="flex-1" id="map">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -74,10 +73,8 @@
             <div class="menu-container bg-gray-200 p-4 flex justify-around fixed bottom-0 inset-x-0 z-20">
                 <!-- Updated Map button with Tailwind CSS classes for full width, blue background, and white text -->
                 <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target=#>Map</button>
-                <button class="tab-button" data-target=#>Routes</button>
-                <button class="tab-button" data-target=#>Timetable</button>
                 <button class="tab-button" data-target="stats.html">Stats</button>
-                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">☕️Thanks</button>
+                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">More</button>
             </div>
 
 

@@ -12,6 +12,7 @@ const fs = require("fs");
 const env = process.env.NODE_ENV || 'dev'
 app.use(backend.static('./public'));
 
+
 let lastUpdateTime = null;
 let gtfsStatus = 'Checking GTFS feed status...';
 
