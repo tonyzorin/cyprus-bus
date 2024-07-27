@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <title>Cyprus Buses on Map</title>
-
     <link rel="stylesheet" href="./css/leaflet.css" />
     <link rel="stylesheet" href="./css/style.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,111 +18,94 @@
     </script>
 </head>
 <body>
-<header>
-    <div id="gtfs-status">Checking GTFS feed status...</div>
-</header>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // Get all buttons with the class 'tab-button'
-        const buttons = document.querySelectorAll('.tab-button');
+    <header>
+        <div id="gtfs-status">Checking GTFS transport feed...</div>
+        <div>
+            <button class="tab-button" data-target="https://github.com/tonyzorin/cyprus-bus">
+                <img src="images/github-logo.png" alt="Github Logo" class="w-6 mr-2" />
+            </button>
+            <button class="tab-button" data-target="https://linkedin.com/in/antonzorin">
+                <img src="images/linkedin-logo.png" alt="Telegram Logo" class="w-6 mr-2" />
+            </button>
+            <button class="tab-button" data-target="https://t.me/tonyzorin">
+                <img src="images/telegram-logo.png" alt="Telegram Logo" class="w-6 mr-2" />
+            </button>
+        </div>
+    </header>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get all buttons with the class 'tab-button'
+            const buttons = document.querySelectorAll('.tab-button');
+            // Add event listener to each button
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Get the target URL from the data-target attribute
+                    const target = button.getAttribute('data-target');
 
-        // Add event listener to each button
-        buttons.forEach(button => {
-            button.addEventListener('click', () => {
-                // Get the target URL from the data-target attribute
-                const target = button.getAttribute('data-target');
-
-                // Redirect to the target URL
-                window.location.href = target;
+                    // Redirect to the target URL
+                    window.location.href = target;
+                });
             });
         });
-    });
-</script>
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        document.querySelectorAll(".tab-button").forEach(button => {
-            button.addEventListener("click", function() {
-                const targetId = this.getAttribute("data-target");
-                const targetTab = document.getElementById(targetId);
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll(".tab-button").forEach(button => {
+                button.addEventListener("click", function() {
+                    const targetId = this.getAttribute("data-target");
+                    const targetTab = document.getElementById(targetId);
 
-                if(targetTab) { // Check if the element exists
-                    document.querySelectorAll('.tab-content').forEach(tabContent => {
-                        tabContent.classList.add('hidden'); // Hide all tab contents
-                    });
-                    targetTab.classList.remove("hidden"); // Show the clicked tab content
-                } else {
-                    console.error("Element with ID '" + targetId + "' was not found.");
+                    if(targetTab) { // Check if the element exists
+                        document.querySelectorAll('.tab-content').forEach(tabContent => {
+                            tabContent.classList.add('hidden'); // Hide all tab contents
+                        });
+                        targetTab.classList.remove("hidden"); // Show the clicked tab content
+                    } else {
+                        console.error("Element with ID '" + targetId + "' was not found.");
+                    }
+                });
+            });
+        });
+    </script>
+<script src="./frontend.js"></script>
+    <div class="flex-1" id="map">
+    </div>
+        <div class="bg-white rounded-lg shadow-lg">
+
+            <div class="menu-container bg-gray-200 p-4 flex justify-evenly fixed bottom-0 inset-x-0 z-20">
+                <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target=#>Map</button>
+                <button class="tab-button" data-target="stats.html">Stats</button>
+                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">
+                    ☕️ Buy Me a Coffee
+                </button>
+            </div>
+
+        </div>
+    <script>
+        document.querySelectorAll('.tab-content').forEach(item => {
+            item.addEventListener('click', function() {
+                // Deactivate all tabs
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+
+                // Activate clicked tab
+                this.classList.add('active');
+
+                // Hide all tab contents
+                document.querySelectorAll('.tab-content-div').forEach(content => {
+                    content.style.display = 'none';
+                });
+
+                // Show current tab content
+                const targetId = this.dataset.target;
+                const targetContent = document.getElementById(targetId);
+                if (targetContent) {
+                    targetContent.style.display = 'block';
                 }
             });
         });
-    });
-
-</script>
-
-
-<script src="./frontend.js"></script>
-    <div class="flex-1" id="map">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        </div>
-    </div>
-        <div class="bg-white rounded-lg shadow-lg">
-            <!-- Navigation tabs -->
-
-            <div class="menu-container bg-gray-200 p-4 flex justify-around fixed bottom-0 inset-x-0 z-20">
-                <!-- Updated Map button with Tailwind CSS classes for full width, blue background, and white text -->
-                <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target=#>Map</button>
-                <button class="tab-button" data-target="stats.html">Stats</button>
-                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">More</button>
-            </div>
-
-
-            <!-- Tabs Content --
-            <div id="map" class="tab-content hidden">Map Content Here
-                <button class="bg-gray-200 rounded-lg p-2">Map</button>
-            </div>
-            <div id="timetableTab" class="tab-content">Timetable Content Here</div>
-            <div id="routesTab" class="tab-content">Routes Content Here</div>
-            <div id="aboutTab" class="tab-content">About Content Here</div>
-            <div class="bg-white">
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
-                    <button class="bg-gray-200 rounded-lg p-2">Pafos</button>
-                    <button class="bg-gray-200 rounded-lg p-2">Larnaca</button>
-                    <button class="bg-gray-200 rounded-lg p-2">Agia Napa</button>
-                    <button class="bg-gray-200 rounded-lg p-2">Intercity</button>
-                    <button class="bg-gray-200 rounded-lg p-2">Nicosia</button>
-                    <button class="bg-gray-200 rounded-lg p-2">Limassol</button>
-                </div>
-            </div>-->
-        </div>
-
-<script>
-    document.querySelectorAll('.tab-content').forEach(item => {
-        item.addEventListener('click', function() {
-            // Deactivate all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-
-            // Activate clicked tab
-            this.classList.add('active');
-
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content-div').forEach(content => {
-                content.style.display = 'none';
-            });
-
-            // Show current tab content
-            const targetId = this.dataset.target;
-            const targetContent = document.getElementById(targetId);
-            if (targetContent) {
-                targetContent.style.display = 'block';
-            }
-        });
-    });
-
-</script>
-
+    </script>
 </body>
 </html>
 

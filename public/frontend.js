@@ -85,32 +85,30 @@ function fetchStops() {
         .catch(error => console.error('Error fetching stops:', error));
 }
 
-async function fetchOrCreatePin(routeShortName, routeColor, routeTextColor) {
-    const displayText = routeShortName === "?" ? "?" : routeShortName;
-    routeColor = routeColor.startsWith('#') ? routeColor : `#${routeColor}`;
-    routeTextColor = routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor}`;
+const routeShortName = "?";
+const routeColor = "000000";
+const routeTextColor = "FFFFFF";
 
+async function fetchOrCreatePin(entity, routeShortName, routeColor, routeTextColor) {
+    const displayText = routeShortName || "?";
+    routeColor = routeColor && routeColor.startsWith('#') ? routeColor : `#${routeColor || '000000'}`;
+    routeTextColor = routeTextColor && routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor || 'FFFFFF'}`;
+    const bearing = entity && entity.vehicle && entity.vehicle.position && entity.vehicle.position.bearing ? entity.vehicle.position.bearing : 0;
 
     const svgContent = `
-   <svg width="70" height="95" viewBox="0 0 70 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="35" height="47" viewBox="0 0 64 90" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform: rotate((180-${bearing})deg);">
     <path d="M34.9556 94.6442C34.0638 94.651 33.1921 94.3771 32.462 93.8607C31.7319 93.3443 31.1797 92.6112 30.8825 91.7634C26.3231 79.0907 9.31643 60.1199 9.13405 59.9207L9.02766 59.7828C4.49113 54.7241 1.50766 48.4471 0.43903 41.7129C-0.629603 34.9786 0.262503 28.0764 3.00718 21.8431C5.75186 15.6099 10.2312 10.3135 15.902 6.59609C21.5729 2.87869 28.1916 0.900024 34.9556 0.900024C41.7195 0.900024 48.3383 2.87869 54.0091 6.59609C59.6799 10.3135 64.1593 15.6099 66.9039 21.8431C69.6486 28.0764 70.5407 34.9786 69.4721 41.7129C68.4035 48.4471 65.42 54.7241 60.8834 59.7828L60.7771 59.9207C60.5947 60.1199 43.588 79.0907 39.0286 91.7634C38.7333 92.6124 38.1817 93.3469 37.4511 93.8636C36.7206 94.3803 35.8479 94.6533 34.9556 94.6442Z" fill="${routeColor}"/>
-    <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;">${routeShortName}</text
-    ></svg>`;
-    /*   const svgContent = `
-      <svg width="70" height="95" viewBox="0 0 70 95" fill="none" xmlns="http://www.w3.org/2000/svg">
-       <path d="M34.9556 94.6442C34.0638 94.651 33.1921 94.3771 32.462 93.8607C31.7319 93.3443 31.1797 92.6112 30.8825 91.7634C26.3231 79.0907 9.31643 60.1199 9.13405 59.9207L9.02766 59.7828C4.49113 54.7241 1.50766 48.4471 0.43903 41.7129C-0.629603 34.9786 0.262503 28.0764 3.00718 21.8431C5.75186 15.6099 10.2312 10.3135 15.902 6.59609C21.5729 2.87869 28.1916 0.900024 34.9556 0.900024C41.7195 0.900024 48.3383 2.87869 54.0091 6.59609C59.6799 10.3135 64.1593 15.6099 66.9039 21.8431C69.6486 28.0764 70.5407 34.9786 69.4721 41.7129C68.4035 48.4471 65.42 54.7241 60.8834 59.7828L60.7771 59.9207C60.5947 60.1199 43.588 79.0907 39.0286 91.7634C38.7333 92.6124 38.1817 93.3469 37.4511 93.8636C36.7206 94.3803 35.8479 94.6533 34.9556 94.6442Z" fill="${routeColor}"/>
-       <g transform="rotate(${entity.vehicle.position.bearing}, 25, 25)">
-       <text x="35" y="47.5" text-anchor="middle" fill="${routeColor}" dy=".3em" style="font-size: 14px;" transform="rotate(${entity.vehicle.position.bearing}, 25, 25)">>${routeShortName}</text
-       ></svg>`;*/
+    <text x="35" y="47.5" text-anchor="middle" fill="${routeTextColor}" dy=".3em" style="font-size: 12px;" transform="rotate(${bearing}, 35, 47.5)">${displayText}</text>
+    </svg>`;
 
     const encodedSvg = encodeURIComponent(svgContent);
     const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
 
     return L.icon({
         iconUrl: iconUrl,
-        // iconSize: [32, 47],
-        // iconAnchor: [16, 47],
-        // popupAnchor: [0, -47]
+        iconSize: [35, 47],  // Adjust icon size as needed
+        iconAnchor: [17.5, 47], // Center the icon
+        popupAnchor: [0, -47]
     });
 }
 
@@ -273,10 +271,10 @@ async function createNewMarker(latitude, longitude, markerIcon, entity) {
 
     // Constructing marker HTML content
     const customHtmlContent = `
-        <div style="position: absolute; font-size: 12px; text-align: center; width: 70px; ">
-            <div style="position: relative; top: 78%; left: 78%; transform: translateX(-50%) rotate(${bearing}deg);">
+        <div style="position: absolute; font-size: 12px; text-align: center; width: 35px; ">
+            <div style="position: relative; top: 78%; left: 78%; transform: translateX(-50%)">
                 <img src="${markerIcon.options.iconUrl}" style="width: 32px; height: 47px;">
-                <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) rotate((180-${bearing})deg); color: #${entity.routeTextColor};">
+                <div style="position: absolute; top: 22%; left: 22%; transform: translateX(-50%) color: #${entity.routeTextColor};">
                 ${routeShortName}
             </div>
             </div>
@@ -310,7 +308,7 @@ function generatePopupContent(entity) {
         return `Unknown Route<br>Route ID: Unknown<br>Route Short Name: ${entity.routeShortName || "N/A"}<br>Route Long Name: ${entity.routeLongName || "N/A"}`;
     } else {
         return `Bus <b>${entity.routeShortName}</b> (vehicle ${entity.vehicle.vehicle.label})<br>
-                ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "N/A"}<br>
+                ${entity.routeLongName}<br>Route ID: ${entity.routeId}<br>Bearing: ${entity.vehicle.position.bearing || "0"}<br>
                 Speed: ${Math.round(entity.vehicle.position.speed) || 0}`;
     }
 }

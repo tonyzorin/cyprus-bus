@@ -20,8 +20,9 @@ async function checkGTFSFeed() {
     try {
         const response = await axios.get(process.env.GTFS_KEY);
         if (response.status === 200) {
-            lastUpdateTime = new Date().toLocaleString(); // Update the last update time
-            gtfsStatus = `available`;
+            // Update the last update time in Cyprus time zone
+            lastUpdateTime = new Date().toLocaleString('en-US', { timeZone: 'Europe/Nicosia' });
+            gtfsStatus = 'available';
         } else {
             gtfsStatus = 'unavailable';
             lastUpdateTime = null;
