@@ -1,6 +1,6 @@
 {
-  "name": "Cyprus Transit Live",
-  "version": "1.0.1",
+  "name": "Cyprus Bus on Map",
+  "version": "1.2",
   "description": "",
   "main": "backend.js",
   "scripts": {
