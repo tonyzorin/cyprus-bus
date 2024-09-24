@@ -1,12 +1,14 @@
 body, html {
-    height: calc(100% - 33px);
+    height: 100%;
     margin: 0;
     padding: 0;
     display: flex;
-    flex-direction: column; /* Stack children vertically */
+    flex-direction: column;
 }
 #map {
-    flex-grow: 1; /* Take up all available space */
+    flex-grow: 1;
+    height: calc(100vh - 80px) !important; /* Adjust 80px to match your footer height */
+    z-index: 1;
 }
 .bottom-menu {
         position: fixed;       /* Fixed position to keep it at the bottom */
@@ -28,6 +30,18 @@ body, html {
     background: white;
     border: 1px solid #ccc;
     cursor: pointer;
+}
+#serverBanner {
+    display: none;
+    background-color: #000000;
+    color: #e59a01;
+    padding: 10px;
+    text-align: center;
+    position: fixed;
+    width: 100%;
+    top: 0;
+    left: 0;
+    z-index: 2000;
 }
 
 
@@ -118,14 +132,14 @@ h3 {
     display: block;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 255, 0.3); // Blue color
-border-radius: 50%;
+    background: rgba(0, 0, 255, 0.3); /* Blue color */
+    border-radius: 50%;
     animation: pulse-animation 2s infinite;
 }
 
 @keyframes pulse-animation {
     0% { transform: scale(0.5); opacity: 1; }
-    100% { transform: scale(1.5); opacity: 0; }
+     100% { transform: scale(1.5); opacity: 0; }
 }
 
 .marker:after {
@@ -204,4 +218,277 @@ border-radius: 50%;
         transform: scale(2.5);
         opacity: 0;
     }
+}
+
+/* Styles moved from index.html */
+.leaflet-popup-content-wrapper {
+    max-height: 80vh; /* Set maximum height to 80% of the viewport height */
+    overflow-y: auto; /* Enable vertical scrolling if content exceeds max height */
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10000; /* Higher than footer */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+    overflow: auto;
+}
+
+.modal.show {
+    display: block;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 400px; /* Adjust this value as needed */
+    border-radius: 10px;
+    text-align: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.modal-content h2 {
+    margin-bottom: 15px;
+    font-size: 1.5em;
+}
+
+.qr-code-image {
+    max-width: 80%;
+    height: auto;
+    margin: 20px 0;
+    display: block;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-content button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+}
+
+#close-modal {
+    background-color: #3b82f6;
+    color: white;
+}
+
+#native-share-button {
+    background-color: #10b981;
+    color: white;
+}
+
+.modal-content button:hover {
+    opacity: 0.9;
+}
+
+/* ProdCamp elements */
+#prodcamp-widget,
+#prodcamp-changelog,
+.prodcamp-modal,
+.prodcamp-modal-backdrop,
+[data-prodcamp-changelog="true"],
+.prodcamp-widget-container,
+.prodcamp-widget-iframe {
+    z-index: 2147483647 !important; /* Maximum z-index value */
+}
+
+/* Ensure the widget is visible in fullscreen */
+:-webkit-full-screen #prodcamp-widget,
+:-moz-full-screen #prodcamp-widget,
+:-ms-fullscreen #prodcamp-widget,
+:fullscreen #prodcamp-widget,
+:-webkit-full-screen .prodcamp-widget-container,
+:-moz-full-screen .prodcamp-widget-container,
+:-ms-fullscreen .prodcamp-widget-container,
+:fullscreen .prodcamp-widget-container,
+:-webkit-full-screen .prodcamp-widget-iframe,
+:-moz-full-screen .prodcamp-widget-iframe,
+:-ms-fullscreen .prodcamp-widget-iframe,
+:fullscreen .prodcamp-widget-iframe {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: 300px !important;
+    height: 500px !important;
+    z-index: 2147483647 !important;
+}
+
+/* Footer styles */
+.menu-container {
+    background-color: #f3f4f6;
+    padding: 12px 4px;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px; /* Set a fixed height for the footer */
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+}
+
+/* Adjust body to account for footer */
+body {
+    padding-bottom: 80px; /* Match this to your footer height */
+}
+
+/* Ensure buttons in the footer are clickable */
+.menu-container button,
+.menu-container a {
+    position: relative;
+    z-index: 1001;
+}
+
+/* Share button styles */
+#share-button {
+    z-index: 1002;
+}
+
+/* Adjust the map to fill the space above the footer */
+#map {
+    flex-grow: 1;
+    height: calc(100vh - 80px) !important; /* Adjust 80px to match your footer height */
+    z-index: 1;
+}
+
+/* Ensure zoom controls and locate button are above the footer */
+.leaflet-bottom {
+    bottom: 80px !important; /* Adjust this value to match your footer height */
+}
+
+.leaflet-control-zoom,
+.leaflet-control-locate {
+    z-index: 1001 !important; /* Ensure these controls are above the footer */
+}
+
+/* Rest of your CSS remains the same */
+
+/* Adjust header styles to ensure buttons are above the map */
+header {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+}
+
+#show-stops-button,
+#share-button {
+    z-index: 1000;
+}
+
+/* Adjust footer styles */
+.menu-container {
+    background-color: #f3f4f6;
+    padding: 8px 4px; /* Reduced padding */
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px; /* Reduced height */
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+}
+
+.menu-container button,
+.menu-container a {
+    font-size: 0.8rem; /* Smaller font size */
+    padding: 4px 8px; /* Reduced padding */
+    border-radius: 4px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #4b5563;
+}
+
+.menu-icon {
+    width: 24px; /* Smaller icon size */
+    height: 24px;
+    margin-bottom: 2px;
+}
+
+/* Adjust map height */
+#map {
+    height: calc(100vh - 60px) !important; /* Adjust to new footer height */
+}
+
+/* Adjust controls position */
+.leaflet-bottom {
+    bottom: 60px !important; /* Adjust to new footer height */
+}
+
+/* Adjust body padding */
+body {
+    padding-bottom: 60px; /* Match new footer height */
+}
+
+/* Ensure the active "Map" button in footer has white text */
+.menu-container .tab-button.bg-blue-500 {
+    color: white;
+}
+
+/* Add this to your existing CSS */
+
+/* Style for the GTFS status */
+#gtfs-status {
+    background-color: white;
+    color: #333;
+    padding: 5px 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    font-size: 0.9rem;
+    max-width: 200px;
+    text-align: center;
+}
+
+/* Adjust header styles to accommodate the GTFS status */
+header {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+header > div:first-child {
+    display: flex;
+    gap: 10px;
+}
+
+#show-stops-button,
+#share-button {
+    z-index: 1000;
 }

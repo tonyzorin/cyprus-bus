@@ -1,17 +1,20 @@
-//const LOGGING_ENABLED = 1; // Set to 0 to disable logging
 const LOGGING_ENABLED = process.env.LOGGING_ENABLED === 'true';
-const dotenv = require('dotenv')
+const dotenv = require('dotenv');
 require('dotenv').config();
 const backend = require('express');
 const axios = require('axios');
-const {connect: connect, query} = require('./database.js');
+const jwt = require('jsonwebtoken');
+const { connect: connect, query } = require('./database.js');
 const app = backend();
 const port = process.env.PORT || 3000;
-const {readPositionsJson} = require('./parseGTFS');
+const { readPositionsJson } = require('./parseGTFS');
 const fs = require("fs");
-const env = process.env.NODE_ENV || 'dev'
+const path = require("path");
+const env = process.env.NODE_ENV || 'dev';
 app.use(backend.static('./public'));
 
+// Add body-parser middleware
+app.use(backend.json({ limit: '10mb' })); // Increase the limit if needed
 
 let lastUpdateTime = null;
 let gtfsStatus = 'Checking GTFS feed status...';
@@ -38,45 +41,6 @@ app.get('/api/gtfs-status', async (req, res) => {
     res.json({ gtfsStatus, lastUpdateTime });
 });
 
-/*function validateEnvVariables() {
-    const requiredEnv = [
-        'POSTGRES_USER',
-        'POSTGRES_HOST',
-        'POSTGRES_DB',
-        'POSTGRES_PASSWORD',
-    ];
-
-    const missingEnv = requiredEnv.filter(envKey => !process.env[envKey]);
-
-    if (missingEnv.length > 0) {
-        throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
-    }
-
-    // Additional validation to ensure environment variables have valid formats
-    // For example, checking if the HOST is a valid URL or IP
-    // This is optional and can be tailored based on specific requirements
-    if (!/^[\w.-]+$/.test(process.env.POSTGRES_USER)) {
-        throw new Error('Invalid format for POSTGRES_USER');
-    }
-    if (!/^[\w.-]+(\.[\w.-]+)+$/.test(process.env.POSTGRES_HOST)) {
-        throw new Error('Invalid format for POSTGRES_HOST');
-    }
-    if (!process.env.POSTGRES_PASSWORD) { // Additional specific checks can be added
-        throw new Error('POSTGRES_PASSWORD cannot be empty');
-    }
-}
-
- */
-
-// Call the validation function at the start of your application
-/*try {
-    validateEnvVariables();
-    console.log('Environment variables validation passed.');
-} catch (error) {
-    console.error(`Environment variables validation failed: ${error.message}`);
-    process.exit(1); // Exit the application if the environment variables are not set correctly
-}
-*/
 function sendTelegramAlert(message) {
     const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
     const params = {
@@ -92,9 +56,6 @@ function sendTelegramAlert(message) {
             console.error("Failed to send message to Telegram:", error);
         });
 }
-
-
-
 
 app.get('/', async (req, res) => {
     await checkGTFSFeed(); // Ensure status is checked before rendering
@@ -114,13 +75,13 @@ app.get('/api/stops', async (req, res) => {
 
 
 app.get('/api/routes-for-stop/:stopId', async (req, res) => {
-    const { stop_id } = req.params;
+    const { stopId } = req.params;
     try {
         const queryText = `
             SELECT DISTINCT
                 routes."routeId",
                 routes.agency_id,
-                routes.route_short_name,
+                trips.trip_headsign,
                 routes.route_long_name,
                 routes.route_desc,
                 routes.route_type,
@@ -133,14 +94,12 @@ app.get('/api/routes-for-stop/:stopId', async (req, res) => {
                     JOIN
                 stop_times ON trips."tripId" = stop_times.trip_id
                     JOIN
-                stops ON stop_times.stop_id = stops.stop_id
-            WHERE
-                stops.stop_id =  $1
+                stops ON stop_times.stop_id::text = $1
         `;
 
         // Assuming `query` is a function that executes a SQL query against your database
         // and returns a Promise that resolves with the query result.
-        const routes = await query(queryText, [stop_id]);
+        const routes = await query(queryText, [stopId]);
         res.json(routes.rows); // Send the resulting routes as a JSON response
     } catch (error) {
         console.error('Failed to fetch routes for stop:', error);
@@ -148,6 +107,48 @@ app.get('/api/routes-for-stop/:stopId', async (req, res) => {
     }
 });
 
+app.get('/api/stop-times/:stopId', async (req, res) => {
+    const { stopId } = req.params;
+    try {
+        const queryText = `
+            SELECT DISTINCT
+                routes.route_short_name,
+                trips.trip_headsign,
+                routes.route_color,
+                routes.route_text_color,
+                stop_times.arrival_time
+            FROM
+                stop_times
+                JOIN trips ON stop_times.trip_id = trips."tripId"
+                JOIN routes ON trips."routeId" = routes."routeId"
+            WHERE
+                stop_times.stop_id = $1
+            ORDER BY
+                stop_times.arrival_time;
+        `;
+
+        const result = await query(queryText, [stopId]);
+        const stopTimes = result.rows;
+
+        // Calculate time left for arrival in minutes and filter for next 90 minutes
+        const currentTime = new Date();
+        const filteredStopTimes = stopTimes
+            .map(stopTime => {
+                const arrivalTime = new Date();
+                const [hours, minutes, seconds] = stopTime.arrival_time.split(':');
+                arrivalTime.setHours(hours, minutes, seconds, 0);
+                const timeLeft = Math.round((arrivalTime - currentTime) / 60000); // Convert milliseconds to minutes
+                return { ...stopTime, time_left: timeLeft };
+            })
+            .filter(stopTime => stopTime.time_left > 0 && stopTime.time_left <= 360) // Filter for next 90 minutes
+            .sort((a, b) => a.time_left - b.time_left || a.route_short_name.localeCompare(b.route_short_name) || a.trip_headsign.localeCompare(b.trip_headsign)); // Sort by time_left, route_short_name, trip_headsign
+
+        res.json(filteredStopTimes);
+    } catch (error) {
+        console.error('Failed to fetch stop times:', error);
+        res.status(500).send('Failed to fetch stop times');
+    }
+});
 
 // Function to fetch data from provided url, used to reduce redundancy
 const fetchData = async (url, errorMessage) => {
@@ -216,9 +217,9 @@ app.get('/api/vehicle-positions', async (req, res) => {
         console.error('Failed to fetch vehicle positions:', error);
         // Check if the error message indicates GTFS data fetch failure
         if (error.message.includes('Failed to fetch GTFS data')) {
-            res.status(503).send('The GTFS server is not available. Please try again later.');
+            res.status(503).json({ error: 'The GTFS server is not available. Please try again later.' });
         } else {
-            res.status(500).send('Failed to fetch vehicle positions');
+            res.status(500).json({ error: 'Failed to fetch vehicle positions' });
         }
     }
 });
@@ -263,6 +264,92 @@ function createTimetablesHandler(fetchData, url) {
     };
 }
 
+// JCCSmart API configuration
+const jccsmartConfig = {
+    id: process.env.JCCSMART_ID,
+    tokens: {
+        accessToken: process.env.JCCSMART_ACCESS_TOKEN,
+        refreshToken: process.env.JCCSMART_REFRESH_TOKEN
+    }
+};
+
+// Function to check if the access token is expired
+function isTokenExpired(token) {
+    const decodedToken = jwt.decode(token);
+    if (!decodedToken || !decodedToken.exp) {
+        return true;
+    }
+    const currentTime = Math.floor(Date.now() / 1000);
+    return decodedToken.exp < currentTime;
+}
+
+// Function to refresh the access token
+async function refreshAccessToken() {
+    try {
+        const response = await axios.post('https://apihub.jcc.com.cy/smartauthms/connect/token', {
+            grant_type: 'refresh_token',
+            refresh_token: jccsmartConfig.tokens.refreshToken
+        }, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        jccsmartConfig.tokens.accessToken = response.data.access_token;
+        jccsmartConfig.tokens.refreshToken = response.data.refresh_token;
+        
+        // You might want to save the new tokens to a secure storage
+        // saveTokensToSecureStorage(jccsmartConfig.tokens);
+    } catch (error) {
+        console.error('Error refreshing access token:', error);
+        throw error;
+    }
+}
+
+// Middleware to check and refresh the access token if needed
+async function ensureValidToken(req, res, next) {
+    if (isTokenExpired(jccsmartConfig.tokens.accessToken)) {
+        try {
+            await refreshAccessToken();
+        } catch (error) {
+            return res.status(401).json({ error: 'Unable to refresh access token' });
+        }
+    }
+    next();
+}
+
+// Proxy endpoint for checking card status
+/* app.get('/api/card-status', ensureValidToken, async (req, res) => {
+    const { cardId } = req.query;
+    try {
+        const response = await axios.get(`https://www.jccsmart.com/api/bus-fare-collection/smart-cards/get-status?cardId=${cardId}`, {
+            headers: {
+                'Authorization': `Bearer ${jccsmartConfig.tokens.accessToken}`
+            }
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching card status:', error);
+        res.status(500).json({ error: 'Error fetching card status' });
+    }
+});
+
+// Proxy endpoint for checking transactions
+app.get('/api/card-transactions', ensureValidToken, async (req, res) => {
+    const { cardId, fromDate, toDate } = req.query;
+    try {
+        const response = await axios.get(`https://www.jccsmart.com/api/bus-fare-collection/smart-cards/${cardId}/transactions`, {
+            params: { fromDate, toDate },
+            headers: {
+                'Authorization': `Bearer ${jccsmartConfig.tokens.accessToken}`
+            }
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching transactions:', error);
+        res.status(500).json({ error: 'Error fetching transactions' });
+    }
+});*/
 
 app.listen(port, () => {
     console.log(`Server listening on port ${port}`);

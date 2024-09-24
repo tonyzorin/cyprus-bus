@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transit Card - Cyprus Bus on Map</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="frontend.js"></script>
+</head>
+<body>
+    <div id="main-container">
+        <header>
+            <h1>Cyprus Bus on Map</h1>
+            <nav>
+                <button class="tab-button" data-target="/">Map</button>
+                <button class="tab-button" data-target="/card.html">Transit Card</button>
+                <button class="tab-button" data-target="/stats.html">Stats</button>
+            </nav>
+        </header>
+
+        <main>
+            <div class="content-container">
+                <h2>Transit Card Management</h2>
+                
+                <form id="cardForm">
+                    <input type="text" id="cardNumber" placeholder="Enter your card number" required>
+                    <button type="submit">Save Card Number</button>
+                </form>
+
+                <div id="cardActions" style="display: none;">
+                    <button id="checkStatus" class="action-button">Check Card Status</button>
+                    <a href="https://www.jccsmart.com/e-bill/26717015" target="_blank" class="action-button">Top-up Transit Card</a>
+                    <button id="checkTransactions" class="action-button">Check Previous Transactions</button>
+                </div>
+
+                <div id="result"></div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p>&copy; 2024 Cyprus Bus on Map. All rights reserved.</p>
+                <nav>
+                    <a href="privacy.html">Privacy Policy</a> |
+                    <a href="terms.html">Terms of Service</a> |
+                    <a href="about.html">About Us</a>
+                </nav>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        function setCookie(name, value, days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days*24*60*60*1000));
+            const expires = `expires=${date.toUTCString()}`;
+            document.cookie = `${name}=${value};${expires};path=/`;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const cardForm = document.getElementById('cardForm');
+            const cardNumber = document.getElementById('cardNumber');
+            const cardActions = document.getElementById('cardActions');
+            const resultDiv = document.getElementById('result');
+
+            // Load saved card number
+            const savedCardNumber = getCookie('cardNumber');
+            if (savedCardNumber) {
+                cardNumber.value = savedCardNumber;
+                cardActions.style.display = 'block';
+            }
+
+            cardForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                setCookie('cardNumber', cardNumber.value, 30);  // Save for 30 days
+                cardActions.style.display = 'block';
+            });
+
+            document.getElementById('checkStatus').addEventListener('click', async function() {
+                const cardId = cardNumber.value;
+                try {
+                    const response = await fetch(`/api/card-status?cardId=${cardId}`);
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<h3>Card Status:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } catch (error) {
+                    resultDiv.innerHTML = `<p>Error fetching card status: ${error.message}</p>`;
+                }
+            });
+
+            document.getElementById('checkTransactions').addEventListener('click', async function() {
+                const cardId = cardNumber.value;
+                const toDate = new Date().toISOString();
+                const fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+                try {
+                    const response = await fetch(`/api/card-transactions?cardId=${cardId}&fromDate=${fromDate}&toDate=${toDate}`);
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<h3>Recent Transactions:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } catch (error) {
+                    resultDiv.innerHTML = `<p>Error fetching transactions: ${error.message}</p>`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -6,32 +6,103 @@
     <link rel="stylesheet" href="./css/style.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="./images/icons/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./leaflet.js"></script>
+    <script src="https://cdn.prodcamp.com/js/prdcmp-sdk.js"></script>
+    <script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
     <script>
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
         posthog.init('phc_7JBpU7pfJomlCDgtNh0GgygKClYpYU52HOBX36qZRZx',{api_host:'https://eu.posthog.com'})
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="./leaflet.js"></script>
-    <script>!function(t,e,a,n){function o(){if(!e.getElementById(a)){var t=e.getElementsByTagName(n)[0],o=e.createElement(n);o.type="text/javascript",o.async=!0,o.src="https://cdn.prodcamp.com/js/prdcmp-sdk.js",t.parentNode.insertBefore(o,t)}}if("function"!=typeof t.ProdCamp){var c=function(){c.args.push(arguments)};c.p="XHNWXMHQK",c.args=[],c.t=t.ProdCampSettings&&t.ProdCampSettings.token,c.f=true,t.ProdCamp=c,"complete"===e.readyState?o():t.attachEvent?t.attachEvent("onload",o):t.addEventListener("load",o,!1)}}(window,document,"prodcamp-js","script");</script>
-    <script>
-        ProdCamp('initFeedbackWidget');
-    </script>
 </head>
 <body>
     <header>
+        <div id="serverBanner">
+            The service is has moved to busonmap.com.
+        </div>
+        <script>
+            // JavaScript to display the banner if the hostname is 'antonzorin.com'
+            if (window.location.hostname === 'antonzorin.com') {
+                document.getElementById('serverBanner').style.display = 'block';
+            }
+        </script>
         <div id="gtfs-status">Checking GTFS transport feed...</div>
         <div>
-            <button class="tab-button" data-target="https://github.com/tonyzorin/cyprus-bus">
-                <img src="images/github-logo.png" alt="Github Logo" class="w-6 mr-2" />
-            </button>
-            <button class="tab-button" data-target="https://linkedin.com/in/antonzorin">
-                <img src="images/linkedin-logo.png" alt="Telegram Logo" class="w-6 mr-2" />
-            </button>
-            <button class="tab-button" data-target="https://t.me/tonyzorin">
-                <img src="images/telegram-logo.png" alt="Telegram Logo" class="w-6 mr-2" />
-            </button>
+            <button id="show-stops-button" class="bg-blue-500 text-white px-4 py-2 rounded">Show Bus Stops</button>
+            <button id="share-button" class="bg-green-500 text-white px-4 py-2 rounded">Share</button>
         </div>
     </header>
+    <div class="flex-1" id="map" style="height: 100vh;"></div> <!-- Ensure the map container has a height -->
+
+    <!-- Pop-up Menu -->
+    <div id="popupMenu" class="popup-menu hidden">
+        <div class="popup-menu-content">
+            <button id="closePopupMenu" class="close-button">&times;</button>
+            <ul>
+                <li><a href="stats.html">Stats</a></li>
+                <li><a href="https://www.buymeacoffee.com/tonyzorin" class="coffee-link">
+                    <img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="coffee-logo">
+                    Buy Me a Coffee
+                </a></li>
+                <li><a href="https://linkedin.com/in/antonzorin">LinkedIn</a></li>
+                <li><a href="https://t.me/tonyzorin">Telegram</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Updated Footer -->
+    <div class="bg-white rounded-lg shadow-lg">
+        <div class="menu-container bg-gray-200 p-4 flex justify-evenly fixed bottom-0 inset-x-0" style="z-index: 9999;">
+            <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target="#">Map</button>
+            <button class="tab-button" data-target="stats.html">Stats</button>
+            <a href="https://t.me/tonyzorin" class="menu-item">
+                <img src="images/telegram-logo.png" alt="Telegram" class="menu-icon">Hi</a>
+            <a href="https://www.buymeacoffee.com/tonyzorin" class="menu-item">
+                <img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="menu-icon">
+                Buy Me a Coffee
+            </a>
+        </div>
+    </div>
+
+    <!-- The Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <h2>Cyprus Bus on Map</h2>
+            <img id="qrCodeImage" class="qr-code-image" src="/images/qr_code.png" alt="QR Code">
+            <div class="modal-buttons">
+                <button id="close-modal">Close</button>
+                <button id="native-share-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this modal structure for the menu -->
+    <div id="menuModal" class="modal">
+        <div class="modal-content">
+            <ul>
+                <li><a href="stats.html" class="menu-item">Stats</a></li>
+                <li>
+                    <a href="https://linkedin.com/in/antonzorin" class="menu-item">
+                        <img src="images/linkedin-logo.png" alt="LinkedIn" class="menu-icon">
+                        LinkedIn
+                    </a>
+                </li>
+                <li>
+                    <a href="https://t.me/tonyzorin" class="menu-item">
+                        <img src="images/telegram-logo.png" alt="Telegram" class="menu-icon">
+                        Telegram
+                    </a>
+                </li>
+                <li>
+                    <a href="https://www.buymeacoffee.com/tonyzorin" class="menu-item">
+                        <img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="menu-icon">
+                        Buy Me a Coffee
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // Get all buttons with the class 'tab-button'
@@ -45,6 +116,36 @@
                     // Redirect to the target URL
                     window.location.href = target;
                 });
+            });
+
+            // Add event listener to the locate button if it exists
+            const locateButton = document.getElementById('locate-button');
+            if (locateButton) {
+                locateButton.addEventListener('click', () => {
+                    showUserPosition();
+                });
+            }
+
+            // Add event listener to the share button
+            const shareButton = document.getElementById('share-button');
+            const modal = document.getElementById('qrModal');
+            const closeButton = document.getElementById('close-modal');
+
+            shareButton.addEventListener('click', () => {
+                // Display the modal
+                modal.style.display = 'block';
+            });
+
+            // Close the modal when the close button is clicked
+            closeButton.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+
+            // Close the modal when clicking outside of the modal content
+            window.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
             });
         });
     </script>
@@ -67,45 +168,17 @@
             });
         });
     </script>
-<script src="./frontend.js"></script>
-    <div class="flex-1" id="map">
-    </div>
-        <div class="bg-white rounded-lg shadow-lg">
-
-            <div class="menu-container bg-gray-200 p-4 flex justify-evenly fixed bottom-0 inset-x-0 z-20">
-                <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target=#>Map</button>
-                <button class="tab-button" data-target="stats.html">Stats</button>
-                <button class="tab-button" data-target="https://www.buymeacoffee.com/tonyzorin">
-                    ☕️ Buy Me a Coffee
-                </button>
-            </div>
-
-        </div>
     <script>
-        document.querySelectorAll('.tab-content').forEach(item => {
-            item.addEventListener('click', function() {
-                // Deactivate all tabs
-                document.querySelectorAll('.tab-content').forEach(tab => {
-                    tab.classList.remove('active');
-                });
+        // Retrieve the item from local storage
+        let initArgs = localStorage.getItem('prodcamp-widget-init-args');
 
-                // Activate clicked tab
-                this.classList.add('active');
-
-                // Hide all tab contents
-                document.querySelectorAll('.tab-content-div').forEach(content => {
-                    content.style.display = 'none';
-                });
-
-                // Show current tab content
-                const targetId = this.dataset.target;
-                const targetContent = document.getElementById(targetId);
-                if (targetContent) {
-                    targetContent.style.display = 'block';
-                }
-            });
-        });
+        // Check if the item contains the specified string
+        if (initArgs && initArgs.includes('anonymous@feedback.wow')) {
+            // Remove the item from local storage
+            localStorage.removeItem('prodcamp-widget-init-args');
+        }
     </script>
+    <script src="./frontend.js"></script>
 </body>
 </html>
 
