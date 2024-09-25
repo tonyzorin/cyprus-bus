@@ -1,7 +1,7 @@
 {
   "name": "Cyprus Bus on Map",
-  "version": "1.2.1",
-  "description": "",
+  "version": "1.2.2",
+  "description": "Public Transit in Cyprus",
   "main": "backend.js",
   "scripts": {
     "start": "node backend.js",
@@ -20,8 +20,7 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.11.3",
     "protobufjs": "^7.2.6",
-    "sharp": "^0.33.3",
-    "jsonwebtoken": "^9.0.0"
+    "sharp": "^0.33.3"
   },
   "devDependencies": {
     "install": "^0.13.0",
