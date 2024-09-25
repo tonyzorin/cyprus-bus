@@ -135,7 +135,7 @@ app.get('/api/stop-times/:stopId', async (req, res) => {
                 const timeLeft = Math.round((arrivalTime - currentTime) / 60000);
                 return { ...stopTime, time_left: timeLeft };
             })
-            .filter(stopTime => stopTime.time_left > 0 && stopTime.time_left <= 360)
+            .filter(stopTime => stopTime.time_left > 0 && stopTime.time_left <= 90)
             .sort((a, b) => a.time_left - b.time_left || a.route_short_name.localeCompare(b.route_short_name) || a.trip_headsign.localeCompare(b.trip_headsign));
 
         res.json(filteredStopTimes);
