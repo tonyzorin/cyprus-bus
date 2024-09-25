@@ -615,7 +615,7 @@ function displayStopTimes(stopId, stopTimes) {
     }
 
     if (stopTimes.length === 0) {
-        stopTimesContainer.innerHTML = 'No upcoming buses in the next 6 hours.';
+        stopTimesContainer.innerHTML = 'No upcoming buses in the next 90 minutes.';
         return;
     }
 
