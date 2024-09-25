@@ -210,22 +210,35 @@ async function fetchGTFSStatus() {
 }
 
 function updateGTFSStatusUI(status) {
-    const statusElement = document.getElementById('gtfs-status'); // Get the DOM element that displays the GTFS status.
+    const statusElement = document.getElementById('gtfs-status');
     if (!statusElement) {
         console.error('Element with ID "gtfs-status" not found');
         return;
     }
 
-    let customMessage;
+    let statusMessage;
     if (status.gtfsStatus.toLowerCase() === 'available') {
-        customMessage = `Status ✅, Updated: ${status.lastUpdateTime})`;
-        statusElement.style.color = 'green'; // Set the color to green if the status is "available"
+        const lastUpdateTime = new Date(status.lastUpdateTime);
+        const currentTime = new Date();
+        const secondsAgo = Math.floor((currentTime - lastUpdateTime) / 1000);
+        
+        let timeString;
+        if (secondsAgo < 3) {
+            timeString = "now";
+        } else if (secondsAgo < 10) {
+            timeString = "just now";
+        } else {
+            timeString = `${secondsAgo} seconds ago`;
+        }
+        
+        statusMessage = `Motion Status: OK ✅ Updated ${timeString}`;
+        statusElement.style.color = 'green';
     } else {
-        customMessage = 'Status ❌ Data from Motion is not available.';
-        statusElement.style.color = 'red'; // Set the color to red otherwise
+        statusMessage = 'Motion Status: ❌ Data from Motion is not available.';
+        statusElement.style.color = 'red';
     }
 
-    statusElement.innerHTML = customMessage; // Set the inner HTML of the status element to the custom message
+    statusElement.textContent = statusMessage;
 }
 
 function fetchStops(useMapBounds = false) {

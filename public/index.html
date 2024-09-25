@@ -14,25 +14,50 @@
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
         posthog.init('phc_7JBpU7pfJomlCDgtNh0GgygKClYpYU52HOBX36qZRZx',{api_host:'https://eu.posthog.com'})
     </script>
+    <style>
+        #gtfs-status {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            background-color: #f0f0f0;
+            padding: 5px 10px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-buttons {
+            position: fixed;
+            top: 40px; /* Adjust this value to position below the GTFS status */
+            left: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #share-button {
+            width: 100px; /* Reduced width for Share button */
+        }
+        #show-stops-button {
+            width: 150px; /* Keep the original width for Bus Stops Here button */
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <div id="serverBanner">
-            The service is has moved to busonmap.com.
-        </div>
-        <script>
-            // JavaScript to display the banner if the hostname is 'antonzorin.com'
-            if (window.location.hostname === 'antonzorin.com') {
-                document.getElementById('serverBanner').style.display = 'block';
-            }
-        </script>
-        <div id="gtfs-status">Checking GTFS transport feed...</div>
-        <div>
-            <button id="show-stops-button" class="bg-blue-500 text-white px-4 py-2 rounded">Show Bus Stops</button>
-            <button id="share-button" class="bg-green-500 text-white px-4 py-2 rounded">Share</button>
-        </div>
-    </header>
-    <div class="flex-1" id="map" style="height: 100vh;"></div> <!-- Ensure the map container has a height -->
+    <div id="gtfs-status">Checking Motion transport feed...</div>
+    
+    <div class="header-buttons">
+        <button id="share-button" class="bg-green-500 text-white px-3 py-2 rounded">Share</button>
+        <button id="show-stops-button" class="bg-blue-500 text-white px-4 py-2 rounded">Bus Stops Here</button>
+    </div>
+    
+    <div id="serverBanner">
+        The service has moved to busonmap.com.
+    </div>
+    
+    <div id="map"></div>
 
     <!-- Pop-up Menu -->
     <div id="popupMenu" class="popup-menu hidden">
@@ -56,11 +81,8 @@
             <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target="#">Map</button>
             <button class="tab-button" data-target="stats.html">Stats</button>
             <a href="https://t.me/tonyzorin" class="menu-item">
-                <img src="images/telegram-logo.png" alt="Telegram" class="menu-icon">Hi</a>
-            <a href="https://www.buymeacoffee.com/tonyzorin" class="menu-item">
-                <img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="menu-icon">
-                Buy Me a Coffee
-            </a>
+                <img src="images/telegram-logo.png" alt="Telegram" class="menu-icon"></a>
+            <a href="https://www.buymeacoffee.com/tonyzorin" class="menu-item"><img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="menu-icon">Say Thanks</a>
         </div>
     </div>
 
