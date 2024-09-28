@@ -291,7 +291,7 @@ function fetchStops(useMapBounds = false) {
                     .bindPopup(`<div style="width: 300px;"><b>${stop.name}</b><br>ID: ${stop.stop_id}<br><div id="stop-${stop.stop_id}-buses">Loading...</div></div>`);
                 
                 marker.on('click', () => {
-                    fetchStopTimes(stop.stop_id);
+                    fetchStopInfo(stop.stop_id);
                 });
 
                 busStopMarkers[stop.stop_id] = marker;
@@ -607,15 +607,32 @@ async function showUserPosition() {
     }
 }
 
-function displayStopTimes(stopId, stopTimes) {
-    const stopTimesContainer = document.getElementById(`stop-${stopId}-buses`);
-    if (!stopTimesContainer) {
+async function fetchStopInfo(stopId) {
+    try {
+        const response = await fetch(`/api/stop/${stopId}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const stopData = await response.json();
+        displayStopInfo(stopId, stopData);
+    } catch (error) {
+        console.error('Error fetching stop info:', error);
+    }
+}
+
+function displayStopInfo(stopId, stopData) {
+    const stopInfoContainer = document.getElementById(`stop-${stopId}-buses`);
+    if (!stopInfoContainer) {
         console.error(`Element with ID "stop-${stopId}-buses" not found`);
         return;
     }
 
-    if (stopTimes.length === 0) {
-        stopTimesContainer.innerHTML = 'No upcoming buses in the next 90 minutes.';
+    const { stop_info, timetable } = stopData;
+
+    if (timetable.length === 0) {
+        stopInfoContainer.innerHTML = 'No upcoming buses in the next 90 minutes.';
         return;
     }
 
@@ -630,6 +647,7 @@ function displayStopTimes(stopId, stopTimes) {
     };
 
     const tableHeader = `
+        <h3>${stop_info.name} (ID: ${stop_info.stop_id})</h3>
         <table style="width: 100%; table-layout: fixed;">
             <colgroup>
                 <col style="width: 70px;">
@@ -642,30 +660,17 @@ function displayStopTimes(stopId, stopTimes) {
                 <th style="font-size: larger; padding: 5px;">Direction</th>
             </tr>
     `;
-    const tableRows = stopTimes.map(stopTime => `
-        <tr style="color: #${stopTime.route_text_color}; background-color: #${stopTime.route_color};">
-            <td style="font-size: larger; padding: 5px;">${formatTimeLeft(stopTime.time_left)}</td>    
-            <td style="font-size: larger; padding: 5px;">${stopTime.route_short_name}</td>
-            <td style="padding: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${stopTime.trip_headsign}</td>
+    const tableRows = timetable.map(info => `
+        <tr style="color: #${info.route_text_color}; background-color: #${info.route_color};">
+            <td style="font-size: larger; padding: 5px;">${formatTimeLeft(info.time_left)}</td>    
+            <td style="font-size: larger; padding: 5px;">${info.route_short_name}</td>
+            <td style="padding: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${info.trip_headsign}</td>
         </tr>
         <tr><td colspan="3"><hr></td></tr>
     `).join('');
     const tableFooter = '</table>';
 
-    stopTimesContainer.innerHTML = tableHeader + tableRows + tableFooter;
-}
-
-async function fetchStopTimes(stopId) {
-    try {
-        const response = await fetch(`/api/stop-times/${stopId}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const stopTimes = await response.json();
-        displayStopTimes(stopId, stopTimes);
-    } catch (error) {
-        console.error('Error fetching stop times:', error);
-    }
+    stopInfoContainer.innerHTML = tableHeader + tableRows + tableFooter;
 }
 
 // Add this function to your existing code
