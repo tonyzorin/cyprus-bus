@@ -11,7 +11,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "axios": "^1.6.7",
+    "cheerio": "^1.0.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
@@ -20,7 +22,8 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.11.3",
     "protobufjs": "^7.2.6",
-    "sharp": "^0.33.3"
+    "sharp": "^0.33.3",
+    "soap": "^1.1.4"
   },
   "devDependencies": {
     "install": "^0.13.0",

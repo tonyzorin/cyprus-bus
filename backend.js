@@ -3,6 +3,7 @@ const dotenv = require('dotenv');
 require('dotenv').config();
 const backend = require('express');
 const axios = require('axios');
+const cheerio = require('cheerio');
 const { connect: connect, query } = require('./database.js');
 const app = backend();
 const port = process.env.PORT || 3000;
@@ -245,6 +246,134 @@ function createTimetablesHandler(fetchData, url) {
             res.status(500).send('An error occurred while fetching timetables.');
         }
     };
+}
+
+async function getRouteDetails(routeShortName) {
+    try {
+        const result = await query(
+            'SELECT route_short_name, trip_headsign, route_color, route_text_color FROM routes JOIN trips ON routes."routeId" = trips."routeId" WHERE routes.route_short_name = $1 LIMIT 1',
+            [routeShortName]
+        );
+        if (result.rows.length > 0) {
+            return result.rows[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('Error fetching route details:', error);
+        return null;
+    }
+}
+
+app.get('/api/stop/:stopId', async (req, res) => {
+    const { stopId } = req.params;
+    try {
+        // Fetch real-time data from Motion
+        const motionUrl = `https://motionbuscard.org.cy/routes/stop/${stopId}`;
+        const motionResponse = await axios.get(motionUrl);
+        const html = motionResponse.data;
+        const $ = cheerio.load(html);
+
+        const realTimeBusTimes = [];
+        const currentTime = new Date();
+
+        $('.arrivalTimes__list__item').each((index, element) => {
+            const routeShortName = $(element).find('.line__item__text').text().trim().split('Διαδρομή')[0];
+            let arrivalTimeText = $(element).find('.arrivalTimes__list__item__link__text2').text().trim();
+
+            if (routeShortName === '' || arrivalTimeText === 'Προβλεπόμενη ώρα σύμφωνα με το χρονοδιάγραμμα') {
+                return;
+            }
+
+            let timeLeft;
+            let arrivalTime;
+
+            if (arrivalTimeText.includes('Λεπτά')) {
+                timeLeft = parseInt(arrivalTimeText.replace('Λεπτά', '').trim());
+                arrivalTime = new Date(currentTime.getTime() + timeLeft * 60000);
+            } else {
+                const [hours, minutes] = arrivalTimeText.split(':').map(Number);
+                arrivalTime = new Date(currentTime);
+                arrivalTime.setHours(hours, minutes, 0, 0);
+
+                if (arrivalTime < currentTime) {
+                    arrivalTime.setDate(arrivalTime.getDate() + 1);
+                }
+
+                timeLeft = Math.round((arrivalTime - currentTime) / 60000);
+            }
+
+            if (isNaN(timeLeft) || !isFinite(timeLeft)) {
+                return;
+            }
+
+            realTimeBusTimes.push({
+                route_short_name: routeShortName,
+                arrival_time: arrivalTime.toTimeString().split(' ')[0],
+                time_left: timeLeft
+            });
+        });
+
+        // Fetch additional information from the database
+        const routeInfoQuery = `
+            SELECT DISTINCT
+                routes.route_short_name,
+                trips.trip_headsign,
+                routes.route_color,
+                routes.route_text_color
+            FROM
+                routes
+                JOIN trips ON routes."routeId" = trips."routeId"
+                JOIN stop_times ON trips."tripId" = stop_times.trip_id
+            WHERE
+                stop_times.stop_id = $1
+                AND routes.route_short_name = ANY($2::text[])
+        `;
+
+        const routeShortNames = realTimeBusTimes.map(bus => bus.route_short_name);
+        const routeInfoResult = await query(routeInfoQuery, [stopId, routeShortNames]);
+        const routeInfo = routeInfoResult.rows;
+
+        // Combine real-time data with database info
+        const combinedTimetable = realTimeBusTimes.map(realTimeBus => {
+            const dbInfo = routeInfo.find(info => info.route_short_name === realTimeBus.route_short_name);
+            return {
+                ...realTimeBus,
+                trip_headsign: dbInfo ? dbInfo.trip_headsign : 'Unknown Destination',
+                route_color: dbInfo ? dbInfo.route_color : 'FFFFFF',
+                route_text_color: dbInfo ? dbInfo.route_text_color : '000000'
+            };
+        });
+
+        // Sort by time_left
+        combinedTimetable.sort((a, b) => a.time_left - b.time_left);
+
+        // Fetch stop information
+        const stopInfoQuery = 'SELECT * FROM stops WHERE stop_id = $1';
+        const stopInfoResult = await query(stopInfoQuery, [stopId]);
+        const stopInfo = stopInfoResult.rows[0];
+
+        // Prepare the final response
+        const response = {
+            stop_info: stopInfo,
+            timetable: combinedTimetable
+        };
+
+        res.json(response);
+    } catch (error) {
+        console.error('Failed to fetch stop info:', error);
+        res.status(500).send('Failed to fetch stop info');
+    }
+});
+
+// Helper function to parse inline styles
+function parseStyle(styleString) {
+    const styles = {};
+    const stylePairs = styleString.split(';').map(s => s.trim()).filter(s => s);
+    stylePairs.forEach(style => {
+        const [key, value] = style.split(':').map(s => s.trim());
+        styles[key] = value;
+    });
+    return styles;
 }
 
 app.listen(port, () => {
