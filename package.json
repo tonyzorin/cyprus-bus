@@ -16,7 +16,7 @@
     "cheerio": "^1.0.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
-    "express": "^4.21.0",
+    "express": "^4.21.1",
     "gtfs-realtime-bindings": "^1.1.1",
     "jsdom": "^24.0.0",
     "node-fetch": "^3.3.2",
