@@ -11,7 +11,6 @@ const { initializeGTFS, readPositionsJson, getGTFSStatus } = require('./parseGTF
 const fs = require("fs");
 const path = require("path");
 const env = process.env.NODE_ENV || 'dev';
-const puppeteer = require('puppeteer');
 const winston = require('winston');
 require('winston-daily-rotate-file');
 
@@ -190,11 +189,13 @@ app.get('/api/vehicle-positions', async (req, res) => {
     try {
         const positionsDataObject = await readPositionsJson();
         if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
-            // Log error once and return cached data if available
-            logger.error('GTFS data not available', { 
-                timestamp: new Date().toISOString(),
-                type: 'gtfs_unavailable'
-            });
+            // Log error only if logging is enabled
+            if (LOGGING_ENABLED) {
+                logger.error('GTFS data not available', { 
+                    timestamp: new Date().toISOString(),
+                    type: 'gtfs_unavailable'
+                });
+            }
             res.status(503).json({ error: 'GTFS data is not available' });
             return;
         }
@@ -203,8 +204,9 @@ app.get('/api/vehicle-positions', async (req, res) => {
 
         const augmentedPositions = await Promise.all(positionsData.map(async (position) => {
             if (!position.vehicle || !position.vehicle.trip) {
-                if (LOGGING_ENABLED) {
-                    console.warn('Skipping position due to missing vehicle or trip data:', position);
+                // Log warning only if logging is enabled and it's not a common occurrence
+                if (LOGGING_ENABLED && Math.random() < 0.1) { // Log only 10% of these warnings
+                    console.warn('Skipping position due to missing vehicle or trip data');
                 }
                 return null;
             }
