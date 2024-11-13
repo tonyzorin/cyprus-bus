@@ -873,7 +873,7 @@ function initializeLocationAndCompass() {
             
             const markerHtml = `
                 <div class="user-marker-container" style="position: relative; width: 200px; height: 200px;">
-                    <div class="beacon" style="position: absolute; left: 132px; top: 132px; transform: translate(-50%, -50%);"></div>
+                    <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%);"></div>
                     <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px;">
                         ${gazeIndicatorSvg}
                     </div>
@@ -896,7 +896,6 @@ function initializeLocationAndCompass() {
             map.setView([lat, lon], 15);
             fetchStops(false);
 
-            // Add compass event listener
             window.addEventListener('deviceorientationabsolute', handleOrientation, true);
             window.addEventListener('deviceorientation', handleOrientation, true);
         }
