@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.7.0",
+    "axios": "^1.7.7",
     "cheerio": "^1.0.0-rc.12",
     "adm-zip": "^0.5.16",
     "csv-parser": "^3.0.0",
@@ -20,7 +20,7 @@
     "gtfs-realtime-bindings": "^1.1.1",
     "pg": "^8.11.3",
     "proxy-agent": "^6.3.1",
-    "puppeteer": "^latest_version",
+    "puppeteer": "^21.7.0",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^4.7.1",
     "lru-cache": "^10.2.0",
