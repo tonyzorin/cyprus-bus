@@ -814,5 +814,5 @@ function moveMarkerSmoothly(marker, newPosition) {
             clearInterval(interval);
             marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position
         }
-    }, 50); // 50ms interval for smooth animation
+    }, 50);
 }
