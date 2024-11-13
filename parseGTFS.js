@@ -11,9 +11,22 @@ async function fetchAndParseGTFS() {
         const response = await axios.get(process.env.GTFS_KEY, { responseType: 'arraybuffer' });
         if (response.status === 200) {
             const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(response.data));
-            gtfsData = feed;
+            
+            // Validate feed data
+            const validEntities = feed.entity.filter(entity => {
+                const isValid = entity.vehicle && 
+                              entity.vehicle.position && 
+                              entity.vehicle.trip &&
+                              entity.vehicle.position.latitude &&
+                              entity.vehicle.position.longitude;
+                return isValid;
+            });
+
+            gtfsData = {
+                ...feed,
+                entity: validEntities
+            };
             lastUpdateTime = new Date();
-            console.log('GTFS data updated successfully');
             return true;
         } else {
             console.error('Failed to fetch GTFS data:', response.status, response.statusText);
@@ -31,12 +44,12 @@ async function initializeGTFS() {
         console.warn('GTFS data is currently not available. The server will start, but some features may be limited.');
     }
     // Set up periodic updates
-    setInterval(fetchAndParseGTFS, 30000); // Check every 30 seconds
+    setInterval(fetchAndParseGTFS, 3000); // Update every 3 seconds
 }
 
 async function readPositionsJson() {
     if (!gtfsData) {
-        console.warn('GTFS data is not available. Returning empty array.');
+        console.warn('GTFS data is not available');
         return { entity: [] };
     }
     return gtfsData;
@@ -45,7 +58,8 @@ async function readPositionsJson() {
 function getGTFSStatus() {
     return {
         available: !!gtfsData,
-        lastUpdateTime: lastUpdateTime ? lastUpdateTime.toISOString() : null
+        lastUpdateTime: lastUpdateTime ? lastUpdateTime.toISOString() : null,
+        vehicleCount: gtfsData ? gtfsData.entity.length : 0
     };
 }
 

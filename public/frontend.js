@@ -53,21 +53,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize sharing
     setupNativeShare();
 
-    // Add event listeners for buttons
-    const buttons = document.querySelectorAll('.tab-button');
-    buttons.forEach(button => {
-        button.addEventListener('click', () => {
-            const target = button.getAttribute('data-target');
-            window.location.href = target;
-        });
-    });
+    // Setup all buttons with consistent style
+    setupButtons();
 
-    const locateButton = document.getElementById('locate-button');
-    if (locateButton) {
-        locateButton.addEventListener('click', () => {
-            showUserPosition();
-        });
-    }
+    // Request user's position immediately
+    showUserPosition();
 });
 
 function setupNativeShare() {
@@ -179,6 +169,322 @@ function updateGTFSStatusUI(status) {
     statusElement.textContent = statusMessage;
 }
 
+// Add bus position fetching and updating functions
+async function fetchBusPositions() {
+    if (isFetchingPaused) return;
+
+    try {
+        const response = await fetch('/api/vehicle-positions');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const positions = await response.json();
+
+        // Transform positions with correct data mapping
+        const transformedPositions = positions.map(pos => ({
+            vehicle_id: pos.vehicle?.vehicle?.id,
+            latitude: pos.vehicle?.position?.latitude,
+            longitude: pos.vehicle?.position?.longitude,
+            bearing: pos.bearing || 0,
+            speed: pos.speed || 0,
+            route_short_name: pos.routeShortName,
+            trip_headsign: pos.routeLongName,
+            license_plate: pos.vehicle?.vehicle?.licensePlate,
+            timestamp: pos.vehicle?.timestamp?.low || pos.vehicle?.timestamp,
+            route_color: pos.routeColor,
+            route_text_color: pos.routeTextColor,
+            routeId: pos.routeId
+        })).filter(pos => {
+            // Filter out positions with invalid coordinates (0,0 or null)
+            const isValid = pos.latitude && 
+                          pos.longitude && 
+                          pos.vehicle_id &&
+                          pos.latitude !== 0 &&
+                          pos.longitude !== 0;
+            return isValid;
+        });
+
+        updateBusMarkers(transformedPositions);
+    } catch (error) {
+        console.error('Error fetching bus positions:', error);
+    }
+}
+
+function pauseFetchingPositions() {
+    if (!isFetchingPaused) {
+        isFetchingPaused = true;
+        if (fetchPositionsInterval) {
+            clearInterval(fetchPositionsInterval);
+            fetchPositionsInterval = null;
+        }
+        // Clear existing bus markers
+        Object.values(busMarkers).forEach(marker => {
+            if (map && marker) {
+                map.removeLayer(marker);
+            }
+        });
+        busMarkers = {};
+    }
+}
+
+function resumeFetchingPositions() {
+    if (isFetchingPaused) {
+        isFetchingPaused = false;
+        fetchBusPositions();
+        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
+    }
+}
+
+function showUserPosition() {
+    if ("geolocation" in navigator) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function(permissionStatus) {
+            if (permissionStatus.state === 'denied') {
+                // Show instructions based on browser/device
+                let instructions = '';
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    instructions = 'To enable location services:\n1. Go to Settings\n2. Privacy & Security\n3. Location Services\n4. Enable for your browser';
+                } else if (/Android/.test(navigator.userAgent)) {
+                    instructions = 'To enable location services:\n1. Go to Settings\n2. Privacy/Location\n3. Enable location access for your browser';
+                } else {
+                    instructions = 'Please enable location services in your browser settings and reload the page.';
+                }
+                alert(instructions);
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                
+                // Store user position globally
+                userPosition = {
+                    lat: lat,
+                    lon: lon
+                };
+                
+                if (typeof map !== 'undefined') {
+                    // Remove existing marker if it exists
+                    if (userMarker) {
+                        map.removeLayer(userMarker);
+                    }
+                    
+                    // Create a new marker with beacon effect and direction arrow
+                    const markerHtml = `
+                        <div class="user-marker-container" style="position: relative; width: 50px; height: 50px;">
+                            <div class="beacon" style="position: absolute; left: 32px; top: 32px; transform: translate(-50%, -50%);"></div>
+                            <div class="direction-arrow" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(0deg); transition: transform 0.3s ease;">
+                                <div style="width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 16px solid #4A90E2;"></div>
+                            </div>
+                            <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px;" alt="Your location">
+                        </div>
+                    `;
+
+                    const userIcon = L.divIcon({
+                        html: markerHtml,
+                        className: 'user-marker',
+                        iconSize: [50, 50],
+                        iconAnchor: [25, 25]
+                    });
+
+                    userMarker = L.marker([lat, lon], {
+                        icon: userIcon,
+                        zIndexOffset: 1000
+                    }).addTo(map);
+                    
+                    // Center map on user location
+                    map.setView([lat, lon], 15);
+
+                    // Load bus stops within 2km radius
+                    fetchStops(false);
+
+                    // Setup device orientation handling
+                    if (window.DeviceOrientationEvent) {
+                        window.addEventListener('deviceorientationabsolute', function(event) {
+                            const arrow = document.querySelector('.direction-arrow');
+                            if (arrow) {
+                                let direction = event.alpha || 0;
+                                if (window.orientation) {
+                                    direction += window.orientation;
+                                }
+                                arrow.style.transform = `translate(-50%, -50%) rotate(${direction}deg)`;
+                            }
+                        }, true);
+                    }
+                }
+            }, function(error) {
+                let errorMessage = 'Unable to get your location. ';
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage += 'Please enable location services in your settings.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage += 'Location information is unavailable.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage += 'Location request timed out.';
+                        break;
+                    default:
+                        errorMessage += 'An unknown error occurred.';
+                }
+                console.error("Error getting location:", error);
+                alert(errorMessage);
+            }, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        });
+    } else {
+        alert("Geolocation is not supported by your browser. Please try using a modern browser with location services.");
+    }
+}
+
+// Make sure this function is available globally
+window.showUserPosition = showUserPosition;
+
+// Add the improved bus marker functions
+async function fetchOrCreatePin(entity, routeShortName, routeColor, routeTextColor) {
+    const displayText = routeShortName || "?";
+    routeColor = routeColor && routeColor.startsWith('#') ? routeColor : `#${routeColor || '000000'}`;
+    routeTextColor = routeTextColor && routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor || 'FFFFFF'}`;
+
+    const svgContent = `
+    <svg width="35" height="47" viewBox="0 0 35 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.5 0C7.83502 0 0 7.83502 0 17.5C0 30.625 17.5 47 17.5 47C17.5 47 35 30.625 35 17.5C35 7.83502 27.165 0 17.5 0Z" fill="${routeColor}"/>
+    <text x="17.5" y="22" text-anchor="middle" fill="${routeTextColor}" font-size="14px" font-weight="bold">${displayText}</text>
+    </svg>`;
+
+    const encodedSvg = encodeURIComponent(svgContent);
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
+
+    return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [35, 47],
+        iconAnchor: [17.5, 47],
+        popupAnchor: [0, -47]
+    });
+}
+
+async function createNewMarker(latitude, longitude, markerIcon, entity) {
+    // Create route number pin
+    const routePin = await fetchOrCreatePin(entity, entity.route_short_name, entity.route_color, entity.route_text_color);
+    
+    // Use bus.svg instead of emoji
+    const bearing = entity.bearing || 0;
+    const combinedIconHtml = `
+        <div style="position: relative; display: inline-block; width: 52.5px; height: 47px;">
+            <img src="/images/pins/bus.svg" style="position: absolute; bottom: 0; left: 50%; width: 24px; height: 24px; transform: translate(-50%, 50%) rotate(${bearing}deg); transform-origin: center; z-index: 1000;">
+            <img src="${routePin.options.iconUrl}" style="position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 0);">
+        </div>
+    `;
+
+    const combinedIcon = L.divIcon({
+        html: combinedIconHtml,
+        iconSize: [52.5, 47],
+        iconAnchor: [26.25, 47],
+        popupAnchor: [0, -47],
+        className: 'custom-bus-marker'
+    });
+
+    if (busMarkers[entity.vehicle_id]) {
+        busMarkers[entity.vehicle_id].setLatLng([latitude, longitude]).setIcon(combinedIcon);
+        busMarkers[entity.vehicle_id].getPopup().setContent(createBusPopupContent(entity));
+    } else {
+        const marker = L.marker([latitude, longitude], {icon: combinedIcon}).addTo(map);
+        marker.bindPopup(createBusPopupContent(entity));
+        marker.on('click', () => {
+            if (entity.routeId) {
+                onBusMarkerClick(entity.routeId);
+            }
+        });
+        busMarkers[entity.vehicle_id] = marker;
+    }
+
+    return busMarkers[entity.vehicle_id];
+}
+
+function updateBusMarkers(positions) {
+    // Remove old markers that are no longer present in the new data
+    Object.keys(busMarkers).forEach(vehicleId => {
+        if (!positions.find(pos => pos.vehicle_id === vehicleId)) {
+            if (map && busMarkers[vehicleId]) {
+                map.removeLayer(busMarkers[vehicleId]);
+                delete busMarkers[vehicleId];
+            }
+        }
+    });
+
+    // Update or add new markers
+    Promise.all(positions.map(async pos => {
+        const latitude = pos.latitude;
+        const longitude = pos.longitude;
+        
+        if (latitude && longitude) {
+            if (busMarkers[pos.vehicle_id]) {
+                // Move existing marker smoothly
+                moveMarkerSmoothly(busMarkers[pos.vehicle_id], [latitude, longitude]);
+                // Update marker icon and popup
+                const marker = await createNewMarker(latitude, longitude, null, pos);
+                busMarkers[pos.vehicle_id] = marker;
+            } else {
+                // Create new marker
+                await createNewMarker(latitude, longitude, null, pos);
+            }
+        }
+    }));
+}
+
+function createBusPopupContent(busData) {
+    const timestamp = typeof busData.timestamp === 'number' ? busData.timestamp : Date.now() / 1000;
+    const date = new Date(timestamp * 1000);
+    const timeString = date.toLocaleTimeString();
+    
+    // Process trip headsign to make first and last destinations bold
+    let formattedHeadsign = '';
+    if (busData.trip_headsign) {
+        const destinations = busData.trip_headsign.split(' - ').map(d => d.trim());
+        if (destinations.length > 1) {
+            destinations[0] = `<b>${destinations[0]}</b>`;
+            destinations[destinations.length - 1] = `<b>${destinations[destinations.length - 1]}</b>`;
+            formattedHeadsign = destinations.join(' - ');
+        } else {
+            formattedHeadsign = busData.trip_headsign;
+        }
+    }
+    
+    // Get the final destination (headsign)
+    const destinations = busData.trip_headsign ? busData.trip_headsign.split(' - ') : [];
+    const finalDestination = destinations.length > 0 ? destinations[destinations.length - 1] : '';
+    
+    return `
+        <div style="min-width: 200px; padding: 10px;">
+            <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <div style="
+                    background-color: #${busData.route_color || '6C757D'}; 
+                    color: #${busData.route_text_color || 'FFFFFF'}; 
+                    padding: 2px 8px; 
+                    border-radius: 12px; 
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                ">
+                    <span style="font-weight: bold;">${busData.route_short_name || 'Unknown'}</span>
+                    <span style="border-left: 1px solid #${busData.route_text_color || 'FFFFFF'}; padding-left: 8px;">
+                        ${finalDestination}
+                    </span>
+                </div>
+            </div>
+            ${formattedHeadsign ? `<div style="margin-bottom: 5px;">${formattedHeadsign}</div>` : ''}
+            ${busData.license_plate ? `<div style="margin-bottom: 5px;">Vehicle: ${busData.license_plate}</div>` : ''}
+            <div style="margin-bottom: 5px;">Speed: ${Math.round(busData.speed || 0)} km/h</div>
+        </div>
+    `;
+}
+
+// Include all the route and stop related functions from the original file
+// ... (rest of the original functions)
+
 function fetchStops(useMapBounds = false) {
     if (!map) {
         console.warn('Map is not initialized yet.');
@@ -264,7 +570,6 @@ async function fetchStopInfo(stopId) {
     }
 }
 
-// Add this function to display stop information
 function displayStopInfo(stopId, data) {
     const stopInfoContainer = document.getElementById(`stop-${stopId}-buses`);
     if (!stopInfoContainer) {
@@ -363,7 +668,6 @@ function displayStopInfo(stopId, data) {
     });
 }
 
-// Add this function to display route shapes
 async function displayRouteShape(routeId) {
     try {
         console.log('Fetching shape for route:', routeId);
@@ -403,7 +707,6 @@ async function displayRouteShape(routeId) {
     }
 }
 
-// Add this function to fetch and display route stops
 async function fetchRouteStops(routeId) {
     try {
         const response = await fetch(`/api/route-stops/${routeId}`);
@@ -439,224 +742,77 @@ async function fetchRouteStops(routeId) {
     }
 }
 
-function showUserPosition() {
-    if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            
-            // Store user position globally
-            userPosition = {
-                lat: lat,
-                lon: lon
-            };
-            
-            // If map and userMarker are defined globally
-            if (typeof map !== 'undefined') {
-                // Remove existing marker if it exists
-                if (userMarker) {
-                    map.removeLayer(userMarker);
-                }
-                
-                // Create a new marker for user position
-                userMarker = L.marker([lat, lon], {
-                    icon: L.icon({
-                        iconUrl: 'images/current-location.png',
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 16]
-                    })
-                }).addTo(map);
-                
-                // Center map on user location
-                map.setView([lat, lon], 15);
-
-                // Load bus stops within 2km radius
-                fetchStops(false); // false means use radius-based fetching
-            }
-        }, function(error) {
-            console.error("Error getting location:", error);
-            alert("Unable to get your location. Please check your location settings.");
-        });
-    } else {
-        alert("Geolocation is not supported by your browser");
+// Add this function to handle bus marker clicks
+function onBusMarkerClick(routeId) {
+    if (routeId) {
+        displayRouteShape(routeId);
     }
 }
 
-// Make sure this function is available globally
-window.showUserPosition = showUserPosition;
-
-function pauseFetchingPositions() {
-    if (!isFetchingPaused) {
-        isFetchingPaused = true;
-        if (fetchPositionsInterval) {
-            clearInterval(fetchPositionsInterval);
-            fetchPositionsInterval = null;
-        }
-        // Clear existing bus markers
-        Object.values(busMarkers).forEach(marker => {
-            if (map && marker) {
-                map.removeLayer(marker);
+// Add this function to initialize buttons with consistent style
+function setupButtons() {
+    const buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(button => {
+        button.addEventListener('click', () => {
+            const target = button.getAttribute('data-target');
+            if (/^\/[a-zA-Z0-9\-\/]*$/.test(target)) {
+                window.location.href = target;
+            } else {
+                console.error('Invalid target URL:', target);
             }
         });
-        busMarkers = {};
-    }
-}
-
-function resumeFetchingPositions() {
-    if (isFetchingPaused) {
-        isFetchingPaused = false;
-        fetchBusPositions();
-        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
-    }
-}
-
-// Add this function for fetching bus positions
-async function fetchBusPositions() {
-    if (isFetchingPaused) return;
-
-    try {
-        const response = await fetch('/api/vehicle-positions');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const positions = await response.json();
-        
-        // Transform positions with correct data mapping
-        const transformedPositions = positions.map(pos => ({
-            vehicle_id: pos.vehicle?.vehicle?.id,
-            latitude: pos.vehicle?.position?.latitude,
-            longitude: pos.vehicle?.position?.longitude,
-            bearing: pos.bearing || 0,
-            speed: pos.speed || 0,
-            route_short_name: pos.routeShortName,
-            trip_headsign: pos.routeLongName,
-            license_plate: pos.vehicle?.vehicle?.licensePlate,
-            timestamp: pos.vehicle?.timestamp?.low || pos.vehicle?.timestamp,
-            route_color: pos.routeColor,
-            route_text_color: pos.routeTextColor,
-            routeId: pos.routeId
-        }));
-
-        updateBusMarkers(transformedPositions);
-    } catch (error) {
-        console.error('Error fetching bus positions:', error);
-    }
-}
-
-// Add this function to update bus markers
-function updateBusMarkers(positions) {
-    // Remove old markers that are no longer present in the new data
-    Object.keys(busMarkers).forEach(vehicleId => {
-        if (!positions.find(pos => pos.vehicle_id === vehicleId)) {
-            if (map && busMarkers[vehicleId]) {
-                map.removeLayer(busMarkers[vehicleId]);
-                delete busMarkers[vehicleId];
-            }
-        }
     });
 
-    // Update or add new markers
-    positions.forEach(pos => {
-        const marker = busMarkers[pos.vehicle_id];
-        const newLatLng = [pos.latitude, pos.longitude];
+    // Style the show stops button to match other buttons but with blue color
+    const showStopsButton = document.getElementById('show-stops-button');
+    if (showStopsButton) {
+        showStopsButton.className = 'tab-button';
+        showStopsButton.style.backgroundColor = '#007bff'; // Blue background
+        showStopsButton.style.color = '#fff'; // White text
+        showStopsButton.style.border = 'none'; // Remove border
+        showStopsButton.style.padding = '8px 16px';
+        showStopsButton.style.borderRadius = '4px';
+        showStopsButton.style.cursor = 'pointer';
+        showStopsButton.innerHTML = 'Show Stops';
+        // Add hover effect
+        showStopsButton.onmouseover = function() {
+            this.style.backgroundColor = '#0056b3'; // Darker blue on hover
+        };
+        showStopsButton.onmouseout = function() {
+            this.style.backgroundColor = '#007bff'; // Back to original blue
+        };
+        showStopsButton.addEventListener('click', () => {
+            fetchStops(true);
+        });
+    }
 
-        if (marker) {
-            // Update existing marker
-            marker.setLatLng(newLatLng);
-            marker.setRotationAngle(pos.bearing || 0);
-            // Update popup content
-            marker.getPopup().setContent(createBusPopupContent(pos));
+    const locateButton = document.getElementById('locate-button');
+    if (locateButton) {
+        locateButton.addEventListener('click', () => {
+            showUserPosition();
+        });
+    }
+}
+
+function moveMarkerSmoothly(marker, newPosition) {
+    const currentLatLng = marker.getLatLng();
+    const newLatLng = L.latLng(newPosition);
+    const distance = currentLatLng.distanceTo(newLatLng);
+    const steps = Math.min(20, Math.max(10, distance / 10)); // Adjust steps based on distance
+    const stepLat = (newLatLng.lat - currentLatLng.lat) / steps;
+    const stepLng = (newLatLng.lng - currentLatLng.lng) / steps;
+
+    let i = 0;
+    const interval = setInterval(() => {
+        if (i < steps) {
+            i++;
+            marker.setLatLng([
+                currentLatLng.lat + (stepLat * i), 
+                currentLatLng.lng + (stepLng * i)
+            ]);
         } else {
-            // Create new marker
-            const newMarker = L.marker(newLatLng, {
-                icon: L.icon({
-                    iconUrl: 'images/pins/bus.svg',
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
-                }),
-                rotationAngle: pos.bearing || 0
-            }).addTo(map);
-
-            newMarker.bindPopup(createBusPopupContent(pos));
-            newMarker.on('click', () => {
-                if (pos.routeId) {
-                    onBusMarkerClick(pos.routeId);
-                }
-            });
-            busMarkers[pos.vehicle_id] = newMarker;
+            clearInterval(interval);
+            marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position
         }
-    });
-}
-
-// Update the popup content function
-function createBusPopupContent(busData) {
-    const timestamp = typeof busData.timestamp === 'number' ? busData.timestamp : Date.now() / 1000;
-    return `
-        <div style="min-width: 200px;">
-            <strong>Route ${busData.route_short_name || 'Unknown'}</strong><br>
-            ${busData.trip_headsign ? `To: ${busData.trip_headsign}<br>` : ''}
-            ${busData.license_plate ? `Vehicle: ${busData.license_plate}<br>` : ''}
-            Speed: ${Math.round(busData.speed || 0)} km/h<br>
-        </div>
-    `;
-}
-
-async function fetchOrCreatePin(entity, routeShortName, routeColor, routeTextColor) {
-    const displayText = routeShortName || "?";
-    routeColor = routeColor && routeColor.startsWith('#') ? routeColor : `#${routeColor || '000000'}`;
-    routeTextColor = routeTextColor && routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor || 'FFFFFF'}`;
-
-    const svgContent = `
-    <svg width="35" height="47" viewBox="0 0 35 47" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M17.5 0C7.83502 0 0 7.83502 0 17.5C0 30.625 17.5 47 17.5 47C17.5 47 35 30.625 35 17.5C35 7.83502 27.165 0 17.5 0Z" fill="${routeColor}"/>
-    <text x="17.5" y="22" text-anchor="middle" fill="${routeTextColor}" font-size="14px" font-weight="bold">${displayText}</text>
-    </svg>`;
-
-    const encodedSvg = encodeURIComponent(svgContent);
-    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
-
-    return L.icon({
-        iconUrl: iconUrl,
-        iconSize: [35, 47],
-        iconAnchor: [17.5, 47],
-        popupAnchor: [0, -47]
-    });
-}
-
-async function createNewMarker(latitude, longitude, markerIcon, entity) {
-    const customIcon = await fetchOrCreatePin(entity, entity.route_short_name, entity.route_color, entity.route_text_color);
-
-    // Create a custom DivIcon that combines the bus icon and the pin with the number
-    const busIconUrl = 'images/pins/bus.svg';
-    const bearing = entity.bearing || 0;
-    const combinedIconHtml = `
-        <div style="position: relative; display: inline-block; width: 52.5px; height: 47px;">
-            <img src="${busIconUrl}" style="position: absolute; bottom: 0; left: 50%; width: 30px; height: 30px; transform: translate(-50%, 50%) rotate(${bearing}deg); transform-origin: center;">
-            <img src="${customIcon.options.iconUrl}" style="position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 0);">
-        </div>
-    `;
-
-    const combinedIcon = L.divIcon({
-        html: combinedIconHtml,
-        iconSize: [52.5, 47],
-        iconAnchor: [26.25, 47],
-        popupAnchor: [0, -47],
-        className: 'custom-bus-marker' // Add this to avoid default leaflet styles
-    });
-
-    if (busMarkers[entity.vehicle?.vehicle?.id]) {
-        busMarkers[entity.vehicle?.vehicle?.id].setLatLng([latitude, longitude]).setIcon(combinedIcon);
-        busMarkers[entity.vehicle?.vehicle?.id].getPopup().setContent(createBusPopupContent(entity));
-    } else {
-        const marker = L.marker([latitude, longitude], {icon: combinedIcon}).addTo(map);
-        marker.bindPopup(createBusPopupContent(entity));
-        marker.on('click', () => {
-            if (entity.routeId) {
-                onBusMarkerClick(entity.routeId);
-            }
-        });
-        busMarkers[entity.vehicle?.vehicle?.id] = marker;
-    }
-
-    return busMarkers[entity.vehicle?.vehicle?.id];
+    }, 50); // 50ms interval for smooth animation
 }
