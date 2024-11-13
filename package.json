@@ -20,19 +20,16 @@
     "gtfs-realtime-bindings": "^1.1.1",
     "pg": "^8.11.3",
     "proxy-agent": "^6.3.1",
-    "puppeteer": "^21.7.0",
+    "puppeteer": "^22.8.2",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^4.7.1",
-    "lru-cache": "^10.2.0",
-    "ws": "^8.17.0"
+    "ws": "^8.17.0",
+    "glob": "^10.3.10"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "overrides": {
-    "inflight": "npm:@isaacs/inflight@^1.0.1"
   }
 }
