@@ -621,7 +621,7 @@ header > div:first-child {
 
 .leaflet-control-locate {
     margin-top: 0 !important;
-    margin-right: 5px !important;  /* Move it left by 5px */
+    margin-right: 13px !important;  /* Move it left by 5px */
     position: relative !important;
     top: -5px !important;  /* Move it up by 5px */
 }
