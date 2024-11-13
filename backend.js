@@ -309,20 +309,25 @@ app.get('/api/vehicle-positions', async (req, res) => {
 app.get('/api/route-shapes/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
+        
+        // Validate routeId
+        if (!routeId || isNaN(parseInt(routeId))) {
+            console.log('Invalid route ID:', routeId);
+            return res.status(400).json({ error: 'Invalid route ID' });
+        }
+
         console.log('Fetching shape for route ID:', routeId);
 
         // First, let's check if the route exists
         const routeCheck = await query(
             'SELECT "routeId", route_short_name FROM routes WHERE "routeId" = $1',
-            [routeId]
+            [parseInt(routeId)]
         );
         
         if (routeCheck.rows.length === 0) {
             console.log('Route not found:', routeId);
             return res.status(404).json({ error: 'Route not found' });
         }
-
-        console.log('Found route:', routeCheck.rows[0]);
 
         const result = await query(`
             SELECT 
@@ -335,9 +340,7 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
             JOIN routes ON trips."routeId" = routes."routeId"
             WHERE routes."routeId" = $1 
             ORDER BY shapes.shape_pt_sequence ASC
-        `, [routeId]);
-
-        console.log(`Found ${result.rows.length} shape points for route ${routeId}`);
+        `, [parseInt(routeId)]);
 
         res.json(result.rows);
     } catch (err) {
@@ -556,41 +559,19 @@ app.get('/api/route-stops/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
         
-        // First, let's get the column names from the stops table
-        const columnsQuery = `
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'stops'
-        `;
-        const columnsResult = await query(columnsQuery);
-        const columns = columnsResult.rows.map(row => row.column_name);
-
-        // Check for the correct stop name, latitude, and longitude columns
-        const stopNameColumn = columns.find(col => 
-            col.toLowerCase().includes('name') || 
-            col.toLowerCase().includes('stopname') || 
-            col.toLowerCase().includes('stop_name')
-        );
-        const latColumn = columns.find(col => 
-            col.toLowerCase().includes('lat') || 
-            col.toLowerCase().includes('latitude')
-        );
-        const lonColumn = columns.find(col => 
-            col.toLowerCase().includes('lon') || 
-            col.toLowerCase().includes('longitude')
-        );
-
-        if (!stopNameColumn || !latColumn || !lonColumn) {
-            throw new Error('Could not find required columns in stops table');
+        // Validate routeId
+        if (!routeId || isNaN(parseInt(routeId))) {
+            return res.status(400).json({ error: 'Invalid route ID' });
         }
 
-        // Now use the correct column names in our main query
+        const parsedRouteId = parseInt(routeId);
+        
         const queryText = `
             SELECT DISTINCT ON (s.stop_id) 
                 s.stop_id, 
-                s."${stopNameColumn}" AS stop_name, 
-                s."${latColumn}" AS stop_lat, 
-                s."${lonColumn}" AS stop_lon, 
+                s.name AS stop_name, 
+                s.lat AS stop_lat, 
+                s.lon AS stop_lon, 
                 st.stop_sequence
             FROM stops s
             JOIN stop_times st ON s.stop_id = st.stop_id
@@ -598,7 +579,8 @@ app.get('/api/route-stops/:routeId', async (req, res) => {
             WHERE t."routeId" = $1
             ORDER BY s.stop_id, st.stop_sequence
         `;
-        const result = await query(queryText, [routeId]);
+        
+        const result = await query(queryText, [parsedRouteId]);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching route stops:', error);

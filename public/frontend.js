@@ -47,9 +47,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     new L.Control.Locate({ position: 'bottomright' }).addTo(map);
 
-    // Load user position immediately after map initialization
-    showUserPosition();
-
     // Initialize bus features
     initializeBusFeatures();
 
@@ -264,30 +261,6 @@ async function fetchStopInfo(stopId) {
         displayStopInfo(stopId, data);
     } catch (error) {
         console.error('Error fetching stop info:', error);
-    }
-}
-
-// Add this function to initialize bus-related features
-async function initializeBusFeatures() {
-    try {
-        // Start GTFS status checks
-        await fetchGTFSStatus();
-        setInterval(fetchGTFSStatus, 10000);
-
-        // Start bus position updates
-        await fetchBusPositions();
-        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
-
-        // Add event listener for the show stops button
-        const showStopsButton = document.getElementById('show-stops-button');
-        if (showStopsButton) {
-            showStopsButton.addEventListener('click', () => {
-                console.log('Show stops button clicked');
-                fetchStops(true);
-            });
-        }
-    } catch (error) {
-        console.error('Error initializing bus features:', error);
     }
 }
 
@@ -548,18 +521,20 @@ async function fetchBusPositions() {
         }
         const positions = await response.json();
         
-        // Transform positions without logging
+        // Transform positions with correct data mapping
         const transformedPositions = positions.map(pos => ({
-            vehicle_id: pos.vehicle?.vehicle?.id || pos.id,
+            vehicle_id: pos.vehicle?.vehicle?.id,
             latitude: pos.vehicle?.position?.latitude,
             longitude: pos.vehicle?.position?.longitude,
-            bearing: pos.bearing || pos.vehicle?.position?.bearing || 0,
-            speed: pos.speed || pos.vehicle?.position?.speed || 0,
+            bearing: pos.bearing || 0,
+            speed: pos.speed || 0,
             route_short_name: pos.routeShortName,
-            trip_headsign: pos.vehicle?.trip?.tripId,
-            timestamp: pos.vehicle?.timestamp,
+            trip_headsign: pos.routeLongName,
+            license_plate: pos.vehicle?.vehicle?.licensePlate,
+            timestamp: pos.vehicle?.timestamp?.low || pos.vehicle?.timestamp,
             route_color: pos.routeColor,
-            route_text_color: pos.routeTextColor
+            route_text_color: pos.routeTextColor,
+            routeId: pos.routeId
         }));
 
         updateBusMarkers(transformedPositions);
@@ -589,13 +564,13 @@ function updateBusMarkers(positions) {
             // Update existing marker
             marker.setLatLng(newLatLng);
             marker.setRotationAngle(pos.bearing || 0);
-            // Update popup content if needed
+            // Update popup content
             marker.getPopup().setContent(createBusPopupContent(pos));
         } else {
             // Create new marker
             const newMarker = L.marker(newLatLng, {
                 icon: L.icon({
-                    iconUrl: './images/pins/bus.svg',
+                    iconUrl: 'images/pins/bus.svg',
                     iconSize: [24, 24],
                     iconAnchor: [12, 12]
                 }),
@@ -603,19 +578,85 @@ function updateBusMarkers(positions) {
             }).addTo(map);
 
             newMarker.bindPopup(createBusPopupContent(pos));
+            newMarker.on('click', () => {
+                if (pos.routeId) {
+                    onBusMarkerClick(pos.routeId);
+                }
+            });
             busMarkers[pos.vehicle_id] = newMarker;
         }
     });
 }
 
-// Add this function to create bus popup content
+// Update the popup content function
 function createBusPopupContent(busData) {
+    const timestamp = typeof busData.timestamp === 'number' ? busData.timestamp : Date.now() / 1000;
     return `
         <div style="min-width: 200px;">
-            <strong>Route ${busData.route_short_name}</strong><br>
-            To: ${busData.trip_headsign}<br>
+            <strong>Route ${busData.route_short_name || 'Unknown'}</strong><br>
+            ${busData.trip_headsign ? `To: ${busData.trip_headsign}<br>` : ''}
+            ${busData.license_plate ? `Vehicle: ${busData.license_plate}<br>` : ''}
             Speed: ${Math.round(busData.speed || 0)} km/h<br>
-            Last update: ${new Date(busData.timestamp).toLocaleTimeString()}
         </div>
     `;
+}
+
+async function fetchOrCreatePin(entity, routeShortName, routeColor, routeTextColor) {
+    const displayText = routeShortName || "?";
+    routeColor = routeColor && routeColor.startsWith('#') ? routeColor : `#${routeColor || '000000'}`;
+    routeTextColor = routeTextColor && routeTextColor.startsWith('#') ? routeTextColor : `#${routeTextColor || 'FFFFFF'}`;
+
+    const svgContent = `
+    <svg width="35" height="47" viewBox="0 0 35 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.5 0C7.83502 0 0 7.83502 0 17.5C0 30.625 17.5 47 17.5 47C17.5 47 35 30.625 35 17.5C35 7.83502 27.165 0 17.5 0Z" fill="${routeColor}"/>
+    <text x="17.5" y="22" text-anchor="middle" fill="${routeTextColor}" font-size="14px" font-weight="bold">${displayText}</text>
+    </svg>`;
+
+    const encodedSvg = encodeURIComponent(svgContent);
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodedSvg}`;
+
+    return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [35, 47],
+        iconAnchor: [17.5, 47],
+        popupAnchor: [0, -47]
+    });
+}
+
+async function createNewMarker(latitude, longitude, markerIcon, entity) {
+    const customIcon = await fetchOrCreatePin(entity, entity.route_short_name, entity.route_color, entity.route_text_color);
+
+    // Create a custom DivIcon that combines the bus icon and the pin with the number
+    const busIconUrl = 'images/pins/bus.svg';
+    const bearing = entity.bearing || 0;
+    const combinedIconHtml = `
+        <div style="position: relative; display: inline-block; width: 52.5px; height: 47px;">
+            <img src="${busIconUrl}" style="position: absolute; bottom: 0; left: 50%; width: 30px; height: 30px; transform: translate(-50%, 50%) rotate(${bearing}deg); transform-origin: center;">
+            <img src="${customIcon.options.iconUrl}" style="position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 0);">
+        </div>
+    `;
+
+    const combinedIcon = L.divIcon({
+        html: combinedIconHtml,
+        iconSize: [52.5, 47],
+        iconAnchor: [26.25, 47],
+        popupAnchor: [0, -47],
+        className: 'custom-bus-marker' // Add this to avoid default leaflet styles
+    });
+
+    if (busMarkers[entity.vehicle?.vehicle?.id]) {
+        busMarkers[entity.vehicle?.vehicle?.id].setLatLng([latitude, longitude]).setIcon(combinedIcon);
+        busMarkers[entity.vehicle?.vehicle?.id].getPopup().setContent(createBusPopupContent(entity));
+    } else {
+        const marker = L.marker([latitude, longitude], {icon: combinedIcon}).addTo(map);
+        marker.bindPopup(createBusPopupContent(entity));
+        marker.on('click', () => {
+            if (entity.routeId) {
+                onBusMarkerClick(entity.routeId);
+            }
+        });
+        busMarkers[entity.vehicle?.vehicle?.id] = marker;
+    }
+
+    return busMarkers[entity.vehicle?.vehicle?.id];
 }
