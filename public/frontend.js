@@ -1,3 +1,12 @@
+let map;
+let userMarker;
+let isFetchingPaused = false;
+let fetchPositionsInterval;
+let busMarkers = {};
+let busStopMarkers = {};
+let currentRoutePolyline = null;
+let userPosition = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing map...');
     
@@ -37,6 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     new L.Control.Locate({ position: 'bottomright' }).addTo(map);
+
+    // Load user position immediately after map initialization
+    showUserPosition();
 
     // Initialize bus features
     initializeBusFeatures();
@@ -452,4 +464,158 @@ async function fetchRouteStops(routeId) {
     } catch (error) {
         console.error('Error fetching route stops:', error);
     }
+}
+
+function showUserPosition() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            // Store user position globally
+            userPosition = {
+                lat: lat,
+                lon: lon
+            };
+            
+            // If map and userMarker are defined globally
+            if (typeof map !== 'undefined') {
+                // Remove existing marker if it exists
+                if (userMarker) {
+                    map.removeLayer(userMarker);
+                }
+                
+                // Create a new marker for user position
+                userMarker = L.marker([lat, lon], {
+                    icon: L.icon({
+                        iconUrl: 'images/current-location.png',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    })
+                }).addTo(map);
+                
+                // Center map on user location
+                map.setView([lat, lon], 15);
+
+                // Load bus stops within 2km radius
+                fetchStops(false); // false means use radius-based fetching
+            }
+        }, function(error) {
+            console.error("Error getting location:", error);
+            alert("Unable to get your location. Please check your location settings.");
+        });
+    } else {
+        alert("Geolocation is not supported by your browser");
+    }
+}
+
+// Make sure this function is available globally
+window.showUserPosition = showUserPosition;
+
+function pauseFetchingPositions() {
+    if (!isFetchingPaused) {
+        isFetchingPaused = true;
+        if (fetchPositionsInterval) {
+            clearInterval(fetchPositionsInterval);
+            fetchPositionsInterval = null;
+        }
+        // Clear existing bus markers
+        Object.values(busMarkers).forEach(marker => {
+            if (map && marker) {
+                map.removeLayer(marker);
+            }
+        });
+        busMarkers = {};
+    }
+}
+
+function resumeFetchingPositions() {
+    if (isFetchingPaused) {
+        isFetchingPaused = false;
+        fetchBusPositions();
+        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
+    }
+}
+
+// Add this function for fetching bus positions
+async function fetchBusPositions() {
+    if (isFetchingPaused) return;
+
+    try {
+        const response = await fetch('/api/vehicle-positions');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const positions = await response.json();
+        
+        // Transform positions without logging
+        const transformedPositions = positions.map(pos => ({
+            vehicle_id: pos.vehicle?.vehicle?.id || pos.id,
+            latitude: pos.vehicle?.position?.latitude,
+            longitude: pos.vehicle?.position?.longitude,
+            bearing: pos.bearing || pos.vehicle?.position?.bearing || 0,
+            speed: pos.speed || pos.vehicle?.position?.speed || 0,
+            route_short_name: pos.routeShortName,
+            trip_headsign: pos.vehicle?.trip?.tripId,
+            timestamp: pos.vehicle?.timestamp,
+            route_color: pos.routeColor,
+            route_text_color: pos.routeTextColor
+        }));
+
+        updateBusMarkers(transformedPositions);
+    } catch (error) {
+        console.error('Error fetching bus positions:', error);
+    }
+}
+
+// Add this function to update bus markers
+function updateBusMarkers(positions) {
+    // Remove old markers that are no longer present in the new data
+    Object.keys(busMarkers).forEach(vehicleId => {
+        if (!positions.find(pos => pos.vehicle_id === vehicleId)) {
+            if (map && busMarkers[vehicleId]) {
+                map.removeLayer(busMarkers[vehicleId]);
+                delete busMarkers[vehicleId];
+            }
+        }
+    });
+
+    // Update or add new markers
+    positions.forEach(pos => {
+        const marker = busMarkers[pos.vehicle_id];
+        const newLatLng = [pos.latitude, pos.longitude];
+
+        if (marker) {
+            // Update existing marker
+            marker.setLatLng(newLatLng);
+            marker.setRotationAngle(pos.bearing || 0);
+            // Update popup content if needed
+            marker.getPopup().setContent(createBusPopupContent(pos));
+        } else {
+            // Create new marker
+            const newMarker = L.marker(newLatLng, {
+                icon: L.icon({
+                    iconUrl: './images/pins/bus.svg',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                }),
+                rotationAngle: pos.bearing || 0
+            }).addTo(map);
+
+            newMarker.bindPopup(createBusPopupContent(pos));
+            busMarkers[pos.vehicle_id] = newMarker;
+        }
+    });
+}
+
+// Add this function to create bus popup content
+function createBusPopupContent(busData) {
+    return `
+        <div style="min-width: 200px;">
+            <strong>Route ${busData.route_short_name}</strong><br>
+            To: ${busData.trip_headsign}<br>
+            Speed: ${Math.round(busData.speed || 0)} km/h<br>
+            Last update: ${new Date(busData.timestamp).toLocaleTimeString()}
+        </div>
+    `;
 }
