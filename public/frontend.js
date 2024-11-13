@@ -989,6 +989,8 @@ function handleOrientation(event) {
         if (window.orientation) {
             direction += window.orientation;
         }
+        // Fix the direction by inverting it (adding 180 degrees)
+        direction = (360 - direction + 180) % 360;
         gazeIndicator.style.transform = `rotate(${direction}deg)`;
     }
 }
