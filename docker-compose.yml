@@ -9,6 +9,7 @@ services:
         - DB_USER
     volumes:
       - .:/usr/src/app
+      - /usr/src/app/node_modules
     ports:
       - "3000:3000"
     environment:
