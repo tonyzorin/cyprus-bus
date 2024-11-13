@@ -4,6 +4,9 @@
     <title>Cyprus Buses on Map</title>
     <link rel="stylesheet" href="./css/leaflet.css" />
     <link rel="stylesheet" href="./css/style.css" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="./images/icons/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,6 +19,7 @@
     </script>
     <script>
         ProdCamp('initFeedbackWidget');
+        ProdCamp('initChangelog');
     </script>
     <style>
         #gtfs-status {
@@ -44,7 +48,19 @@
             width: 100px; /* Reduced width for Share button */
         }
         #show-stops-button {
-            width: 150px; /* Keep the original width for Bus Stops Here button */
+            position: fixed;
+            bottom: 80px;  /* Adjust this value to position above the menu bar */
+            right: 10px;
+            z-index: 1000;
+            width: 150px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        /* Add this to your existing styles */
+        .common-route {
+            margin-bottom: 10px;
+            padding: 5px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -52,8 +68,10 @@
     <div id="gtfs-status">Checking Motion transport feed...</div>
     
     <div class="header-buttons">
-        <button id="share-button" class="bg-green-500 text-white px-3 py-2 rounded">Share</button>
-        <button id="show-stops-button" class="bg-blue-500 text-white px-4 py-2 rounded">Bus Stops Here</button>
+        <button id="share-button" class="bg-green-500 text-white px-4 py-2 rounded">Share</button>
+        <div data-prodcamp-changelog="true">
+            <button id="changelog" class="bg-blue-500 text-white px-4 py-2 rounded">What's&nbsp;New</button>
+        </div>
     </div>
     
     <div id="serverBanner">
@@ -208,7 +226,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof ProdCamp !== 'undefined') {
                 ProdCamp('init', {
-                    token: 'YOUR_PRODCAMP_TOKEN_HERE',
+                    token: '',
                     widget: {
                         position: 'bottom-right'
                     }
@@ -218,9 +236,31 @@
             }
         });
     </script>
+    <!-- Keep this button separate as it's positioned at the bottom right -->
+    <button id="show-stops-button" class="bg-blue-500 text-white px-4 py-2 rounded" style="position: fixed; bottom: 80px; right: 10px; z-index: 1000; width: 150px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        🚏 Show Bus Stops
+    </button>
+    <!-- Add this script just before the closing </body> tag -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing code...
+
+            // Add event listener for the "What's New" button
+            const changelogButton = document.getElementById('changelog');
+            if (changelogButton) {
+                changelogButton.addEventListener('click', function() {
+                    if (typeof ProdCamp !== 'undefined') {
+                        ProdCamp('showChangelog');
+                    } else {
+                        console.error('ProdCamp is not defined');
+                    }
+                });
+            } else {
+                console.warn("Changelog button not found");
+            }
+
+            // Rest of your existing code...
+        });
+    </script>
 </body>
 </html>
-
-
-
-

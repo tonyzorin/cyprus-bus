@@ -385,7 +385,6 @@ body {
 /* Rest of your CSS remains the same */
 
 
-#show-stops-button,
 #share-button {
     z-index: 1000;
 }
@@ -467,7 +466,6 @@ header > div:first-child {
     gap: 10px;
 }
 
-#show-stops-button,
 #share-button {
     z-index: 1000;
 }
@@ -482,7 +480,7 @@ header > div:first-child {
     background-color: #f0f0f0;
     padding: 5px 10px;
     text-align: center;
-    font-weight: normal;
+    font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
@@ -526,3 +524,127 @@ header > div:first-child {
 }
 
 /* ... (rest of your existing styles) ... */
+
+.header-buttons {
+    position: fixed;
+    top: 40px; /* Adjust this value to position below the GTFS status */
+    left: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#share-button,
+#changelog {
+    font-size: 0.7em;
+    z-index: 1000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* You may want to adjust the widths of the buttons if needed */
+#share-button {
+    width: 70px;
+}
+
+#show-stops-button {
+    position: fixed;
+    bottom: 70px; /* Adjust this value to position it above the footer */
+    right: 10px;
+    z-index: 1000;
+    font-size: 0.8em;
+    padding: 3.5px 5.25px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#changelog {
+    width: auto;
+}
+
+.leaflet-control-locate {
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+}
+
+.leaflet-control-locate a {
+    display: block;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+}
+
+.leaflet-control-locate svg {
+    fill: #464646;
+    vertical-align: middle;
+    padding: 6px;
+}
+
+.leaflet-control-locate:hover svg {
+    fill: #000;
+}
+
+.leaflet-control-locate {
+    margin-top: 10px !important;
+}
+
+.leaflet-control-locate a {
+    background-color: #fff;
+    border-bottom: none;
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+}
+
+.leaflet-control-locate a:hover {
+    background-color: #f4f4f4;
+}
+
+/* Match zoom control size */
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+}
+
+/* Update control styles */
+.leaflet-control-zoom {
+    margin-bottom: 0 !important;
+}
+
+.leaflet-control-locate {
+    margin-top: 0 !important;
+    margin-right: 5px !important;  /* Move it left by 5px */
+    position: relative !important;
+    top: -5px !important;  /* Move it up by 5px */
+}
+
+.leaflet-control-locate a {
+    width: 40px !important;
+    height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: white !important;
+    border-radius: 4px !important;
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+}
+
+/* Ensure controls are stacked properly */
+.leaflet-right .leaflet-control {
+    clear: both !important;
+    margin-bottom: 0 !important;
+}

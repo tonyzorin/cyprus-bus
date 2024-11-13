@@ -1,64 +1,56 @@
-const protobuf = require("protobufjs");
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-const protoPath = "gtfs-realtime.proto";
-const dotenv = require('dotenv')
-require('dotenv').config();
-const gtfsRealtimeUrl = process.env.GTFS_KEY;
-// Cache implementation
-let cache = {
-    timestamp: 0,
-    duration: 3141 * 1, // Cache duration in milliseconds (e.g., 120000ms is 2 minutes)
-    data: null
-};
+const axios = require('axios');
+const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
+const fs = require('fs').promises;
+const path = require('path');
 
-function readPositionsJson() {
-    // Check if cache is still valid
-    if (Date.now() - cache.timestamp < cache.duration && cache.data !== null) {
-        // Return cached data if still valid
-        return Promise.resolve(cache.data);
-    } else {
-        // Fetch new data if cache is invalid or empty
-        return new Promise((resolve, reject) => {
-            protobuf.load(protoPath, function(err, root) {
-                if (err) return reject(err);
+let gtfsData = null;
+let lastUpdateTime = null;
 
-                let FeedMessage = root.lookupType("transit_realtime.FeedMessage");
-
-                fetch(gtfsRealtimeUrl)
-                    .then(response => {
-                        // Check if the response status is 500
-                        if (response.status === 500) {
-                            throw new Error('GTFS data is currently not available. Please try again later.');
-                        }
-                        return response.arrayBuffer();
-                    })
-                    .then(arrayBuffer => {
-                        const buffer = Buffer.from(arrayBuffer);
-                        let message = FeedMessage.decode(buffer);
-                        let object = FeedMessage.toObject(message, {
-                            enums: String,
-                            longs: String,
-                            bytes: String,
-                            defaults: true,
-                            arrays: true,
-                            objects: true,
-                            oneofs: true
-                        });
-                        // Update cache with new data
-                        cache.timestamp = Date.now();
-                        cache.data = object;
-                        resolve(object); // Resolve the promise with the decoded JSON object
-                    })
-                    .catch(error => {
-                        console.error(error.message || 'Failed to fetch GTFS data.');
-                        reject(error);
-                    });
-            });
-        });
+async function fetchAndParseGTFS() {
+    try {
+        const response = await axios.get(process.env.GTFS_KEY, { responseType: 'arraybuffer' });
+        if (response.status === 200) {
+            const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(response.data));
+            gtfsData = feed;
+            lastUpdateTime = new Date();
+            console.log('GTFS data updated successfully');
+            return true;
+        } else {
+            console.error('Failed to fetch GTFS data:', response.status, response.statusText);
+            return false;
+        }
+    } catch (error) {
+        console.error('Error fetching GTFS data:', error.message);
+        return false;
     }
 }
 
+async function initializeGTFS() {
+    const success = await fetchAndParseGTFS();
+    if (!success) {
+        console.warn('GTFS data is currently not available. The server will start, but some features may be limited.');
+    }
+    // Set up periodic updates
+    setInterval(fetchAndParseGTFS, 30000); // Check every 30 seconds
+}
 
-module.exports = { readPositionsJson };
+async function readPositionsJson() {
+    if (!gtfsData) {
+        console.warn('GTFS data is not available. Returning empty array.');
+        return { entity: [] };
+    }
+    return gtfsData;
+}
 
-readPositionsJson();
+function getGTFSStatus() {
+    return {
+        available: !!gtfsData,
+        lastUpdateTime: lastUpdateTime ? lastUpdateTime.toISOString() : null
+    };
+}
+
+module.exports = {
+    initializeGTFS,
+    readPositionsJson,
+    getGTFSStatus
+};
