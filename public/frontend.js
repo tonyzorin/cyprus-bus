@@ -755,7 +755,11 @@ function setupButtons() {
     buttons.forEach(button => {
         button.addEventListener('click', () => {
             const target = button.getAttribute('data-target');
-            window.location.href = target;
+            if (/^\/[a-zA-Z0-9\-\/]*$/.test(target)) {
+                window.location.href = target;
+            } else {
+                console.error('Invalid target URL:', target);
+            }
         });
     });
 
