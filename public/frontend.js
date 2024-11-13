@@ -6,8 +6,6 @@ let busMarkers = {};
 let busStopMarkers = {};
 let currentRoutePolyline = null;
 let userPosition = null;
-let isCompassAvailable = false;
-let watchPositionId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing map...');
@@ -820,153 +818,60 @@ function moveMarkerSmoothly(marker, newPosition) {
 }
 
 function initializeLocationAndCompass() {
-    checkCompassAvailability().then(available => {
-        isCompassAvailable = available;
+    navigator.geolocation.getCurrentPosition(function(position) {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
         
-        // Get initial position and center map
-        navigator.geolocation.getCurrentPosition(function(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
+        userPosition = { lat, lon };
+        
+        if (typeof map !== 'undefined') {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+            }
             
-            userPosition = { lat, lon };
+            const gazeIndicatorSvg = `
+                <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+                            <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
+                            <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
+                        </radialGradient>
+                    </defs>
+                    <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
+                </svg>
+            `;
             
-            if (typeof map !== 'undefined') {
-                if (userMarker) {
-                    map.removeLayer(userMarker);
-                }
-                
-                // Only include the gaze indicator if compass is available
-                const gazeIndicatorHtml = isCompassAvailable ? `
+            const markerHtml = `
+                <div class="user-marker-container" style="position: relative; width: 200px; height: 200px;">
+                    <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%);"></div>
                     <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px;">
-                        <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
-                                    <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
-                                    <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
-                                </radialGradient>
-                            </defs>
-                            <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
-                        </svg>
+                        ${gazeIndicatorSvg}
                     </div>
-                ` : '';
-                
-                const markerHtml = `
-                    <div class="user-marker-container" style="position: relative; width: 200px; height: 200px;">
-                        <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%);"></div>
-                        ${gazeIndicatorHtml}
-                        <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; z-index: 1000;" alt="Your location">
-                    </div>
-                `;
+                    <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; z-index: 1000;" alt="Your location">
+                </div>
+            `;
 
-                const userIcon = L.divIcon({
-                    html: markerHtml,
-                    className: 'user-marker',
-                    iconSize: [200, 200],
-                    iconAnchor: [100, 100]
-                });
+            const userIcon = L.divIcon({
+                html: markerHtml,
+                className: 'user-marker',
+                iconSize: [200, 200],
+                iconAnchor: [100, 100]
+            });
 
-                userMarker = L.marker([lat, lon], {
-                    icon: userIcon,
-                    zIndexOffset: 1000
-                }).addTo(map);
-                
-                map.setView([lat, lon], 15);
-                fetchStops(false);
+            userMarker = L.marker([lat, lon], {
+                icon: userIcon,
+                zIndexOffset: 1000
+            }).addTo(map);
+            
+            map.setView([lat, lon], 15);
+            fetchStops(false);
 
-                // Start continuous position updates
-                if (watchPositionId) {
-                    navigator.geolocation.clearWatch(watchPositionId);
-                }
-                
-                watchPositionId = navigator.geolocation.watchPosition(
-                    function(position) {
-                        const newLat = position.coords.latitude;
-                        const newLon = position.coords.longitude;
-                        userPosition = { lat: newLat, lon: newLon };
-                        
-                        if (userMarker) {
-                            moveMarkerSmoothly(userMarker, [newLat, newLon]);
-                        }
-                    },
-                    handleLocationError,
-                    {
-                        enableHighAccuracy: true,
-                        maximumAge: 0,
-                        timeout: 5000
-                    }
-                );
-
-                // Only add orientation listeners if compass is available
-                if (isCompassAvailable) {
-                    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                }
-            }
-        }, handleLocationError, {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 5000
-        });
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }, handleLocationError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
     });
 }
-
-// Add this new function to check compass availability
-function checkCompassAvailability() {
-    return new Promise((resolve) => {
-        let orientationTest = null;
-        let timeoutId = null;
-
-        // Function to check if we're getting real orientation data
-        const checkOrientation = (event) => {
-            if (event.alpha !== null && event.alpha !== 0) {
-                cleanup();
-                resolve(true);
-            }
-        };
-
-        // Cleanup function
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            window.removeEventListener('deviceorientationabsolute', checkOrientation);
-            window.removeEventListener('deviceorientation', checkOrientation);
-        };
-
-        // Set timeout to resolve false if no valid orientation data is received
-        timeoutId = setTimeout(() => {
-            cleanup();
-            resolve(false);
-        }, 1000);
-
-        // Try both event types
-        window.addEventListener('deviceorientationabsolute', checkOrientation);
-        window.addEventListener('deviceorientation', checkOrientation);
-
-        // If DeviceOrientationEvent is not supported at all
-        if (!window.DeviceOrientationEvent) {
-            cleanup();
-            resolve(false);
-        }
-    });
-}
-
-// Update the handleOrientation function (if you have one)
-function handleOrientation(event) {
-    if (!isCompassAvailable) return;
-    
-    const gazeIndicator = document.querySelector('.gaze-indicator');
-    if (gazeIndicator) {
-        let direction = event.alpha || 0;
-        if (window.orientation) {
-            direction += window.orientation;
-        }
-        // Fix the direction by inverting it (adding 180 degrees)
-        direction = (360 - direction + 180) % 360;
-        gazeIndicator.style.transform = `rotate(${direction}deg)`;
-    }
-}
-
-window.addEventListener('beforeunload', () => {
-    if (watchPositionId !== null) {
-        navigator.geolocation.clearWatch(watchPositionId);
-    }
-});
