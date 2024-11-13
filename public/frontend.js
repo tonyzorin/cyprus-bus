@@ -844,5 +844,65 @@ function moveMarkerSmoothly(marker, newPosition) {
             clearInterval(interval);
             marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position
         }
-    }, 50); // 50ms interval for smooth animation
+    }, 50);
+}
+
+function initializeLocationAndCompass() {
+    navigator.geolocation.getCurrentPosition(function(position) {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        
+        userPosition = { lat, lon };
+        
+        if (typeof map !== 'undefined') {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+            }
+            
+            const gazeIndicatorSvg = `
+                <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+                            <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
+                            <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
+                        </radialGradient>
+                    </defs>
+                    <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
+                </svg>
+            `;
+            
+            const markerHtml = `
+                <div class="user-marker-container" style="position: relative; width: 200px; height: 200px;">
+                    <div class="beacon" style="position: absolute; left: 132px; top: 132px; transform: translate(-50%, -50%);"></div>
+                    <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px;">
+                        ${gazeIndicatorSvg}
+                    </div>
+                    <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; z-index: 1000;" alt="Your location">
+                </div>
+            `;
+
+            const userIcon = L.divIcon({
+                html: markerHtml,
+                className: 'user-marker',
+                iconSize: [200, 200],
+                iconAnchor: [100, 100]
+            });
+
+            userMarker = L.marker([lat, lon], {
+                icon: userIcon,
+                zIndexOffset: 1000
+            }).addTo(map);
+            
+            map.setView([lat, lon], 15);
+            fetchStops(false);
+
+            // Add compass event listener
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }, handleLocationError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+    });
 }
