@@ -12,9 +12,11 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.7.7",
-    "cheerio": "^1.0.0",
+    "cheerio": "^1.0.0-rc.12",
+    "adm-zip": "^0.5.16",
+    "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
-    "express": "^4.18.2",
+    "express": "^4.21.1",
     "gtfs-realtime-bindings": "^1.1.1",
     "node-fetch": "^2.6.9",
     "protobufjs": "7.4.0",
