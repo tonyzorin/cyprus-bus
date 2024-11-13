@@ -1,7 +1,7 @@
 {
   "name": "cyprus-bus",
   "version": "1.0.0",
-  "description": "Cyprus Bus Tracking Application",
+  "description": "Cyprus Bus ",
   "main": "backend.js",
   "scripts": {
     "start": "node backend.js",
@@ -20,7 +20,7 @@
     "gtfs-realtime-bindings": "^1.1.1",
     "pg": "^8.11.3",
     "proxy-agent": "^6.3.1",
-    "puppeteer": "^23.7.1",
+    "puppeteer": "^latest_version",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^4.7.1",
     "lru-cache": "^10.2.0",
