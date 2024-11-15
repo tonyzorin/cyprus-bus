@@ -6,6 +6,7 @@ let busMarkers = {};
 let busStopMarkers = {};
 let currentRoutePolyline = null;
 let userPosition = null;
+let isCompassAvailable = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing map...');
@@ -817,7 +818,26 @@ function moveMarkerSmoothly(marker, newPosition) {
     }, 50);
 }
 
+function checkCompassAvailability() {
+    if (window.DeviceOrientationEvent) {
+        // Check if we can access device orientation
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ devices
+            isCompassAvailable = true;
+        } else {
+            // Non iOS devices
+            window.addEventListener('deviceorientation', function(event) {
+                isCompassAvailable = (event.alpha != null);
+            }, { once: true });
+        }
+    }
+    return isCompassAvailable;
+}
+
 function initializeLocationAndCompass() {
+    // Check compass availability before creating the marker
+    checkCompassAvailability();
+    
     navigator.geolocation.getCurrentPosition(function(position) {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
