@@ -312,7 +312,30 @@ function showUserPosition() {
                         window.addEventListener('deviceorientationabsolute', function(event) {
                             const cone = document.querySelector('.direction-cone');
                             if (cone) {
-                                let direction = event.alpha || 0;
+                                let direction = 0;
+                                if (event.webkitCompassHeading) {
+                                    // iOS devices
+                                    direction = event.webkitCompassHeading;
+                                } else if (event.alpha !== null) {
+                                    // Android devices
+                                    direction = 360 - event.alpha;
+                                }
+                                
+                                // Adjust for screen orientation
+                                if (window.orientation) {
+                                    direction += window.orientation;
+                                }
+                                
+                                cone.style.transform = `rotate(${direction}deg)`;
+                                cone.style.transformOrigin = 'center center';
+                            }
+                        }, true);
+                        
+                        // Fallback to regular deviceorientation event
+                        window.addEventListener('deviceorientation', function(event) {
+                            const cone = document.querySelector('.direction-cone');
+                            if (cone && event.alpha !== null) {
+                                let direction = 360 - event.alpha;
                                 if (window.orientation) {
                                     direction += window.orientation;
                                 }
