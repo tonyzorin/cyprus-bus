@@ -289,7 +289,8 @@ function showUserPosition() {
 
                     userMarker = L.marker([lat, lon], {
                         icon: userIcon,
-                        zIndexOffset: 1000
+                        zIndexOffset: 1000,
+                        interactive: false
                     }).addTo(map);
                     
                     // Center map on user location
@@ -880,7 +881,8 @@ function initializeLocationAndCompass() {
 
             userMarker = L.marker([lat, lon], {
                 icon: userIcon,
-                zIndexOffset: 1000
+                zIndexOffset: 1000,
+                interactive: false
             }).addTo(map);
             
             map.setView([lat, lon], 15);
