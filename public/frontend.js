@@ -725,8 +725,8 @@ async function displayRouteShape(routeId) {
 
         currentRoutePolyline = L.polyline(latLngs, {
             color: routeColor,
-            weight: 4,
-            opacity: 0.8
+            weight: 6,
+            opacity: 0.9
         }).addTo(map);
 
         // Fetch and display stops for this route
@@ -859,25 +859,25 @@ function initializeLocationAndCompass() {
                 map.removeLayer(userMarker);
             }
             
-            const gazeIndicatorSvg = `
-                <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
-                            <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
-                            <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
-                        </radialGradient>
-                    </defs>
-                    <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
-                </svg>
-            `;
+            const gazeIndicatorHtml = isCompassAvailable ? `
+                <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px; pointer-events: none;">
+                    <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="pointer-events: none;">
+                        <defs>
+                            <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+                                <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
+                                <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
+                            </radialGradient>
+                        </defs>
+                        <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
+                    </svg>
+                </div>
+            ` : '';
             
             const markerHtml = `
-                <div class="user-marker-container" style="position: relative; width: 200px; height: 200px;">
-                    <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%);"></div>
-                    <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px;">
-                        ${gazeIndicatorSvg}
-                    </div>
-                    <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; z-index: 1000;" alt="Your location">
+                <div class="user-marker-container" style="position: relative; width: 200px; height: 200px; pointer-events: none !important;">
+                    <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%); pointer-events: none !important;"></div>
+                    ${gazeIndicatorHtml}
+                    <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none !important; width: 48px; height: 48px; z-index: 1000;" alt="Your location">
                 </div>
             `;
 
