@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function() {
         zoomControl: false
     });
 
-    // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
