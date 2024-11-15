@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function() {
         zoomControl: false
     });
 
-    // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
@@ -257,34 +256,43 @@ function showUserPosition() {
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
                 
-                // Store user position globally
-                userPosition = {
-                    lat: lat,
-                    lon: lon
-                };
+                userPosition = { lat, lon };
                 
                 if (typeof map !== 'undefined') {
-                    // Remove existing marker if it exists
                     if (userMarker) {
                         map.removeLayer(userMarker);
                     }
+
+                    // Check compass availability
+                    checkCompassAvailability();
                     
-                    // Create a new marker with beacon effect and direction arrow
+                    const gazeIndicatorHtml = isCompassAvailable ? `
+                        <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px; pointer-events: none;">
+                            <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="pointer-events: none;">
+                                <defs>
+                                    <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+                                        <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
+                                        <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
+                                    </radialGradient>
+                                </defs>
+                                <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
+                            </svg>
+                        </div>
+                    ` : '';
+                    
                     const markerHtml = `
-                        <div class="user-marker-container" style="position: relative; width: 50px; height: 50px;">
-                            <div class="beacon" style="position: absolute; left: 32px; top: 32px; transform: translate(-50%, -50%);"></div>
-                            <div class="direction-arrow" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(0deg); transition: transform 0.3s ease;">
-                                <div style="width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 16px solid #4A90E2;"></div>
-                            </div>
-                            <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px;" alt="Your location">
+                        <div class="user-marker-container" style="position: relative; width: 200px; height: 200px; pointer-events: none !important;">
+                            <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%); pointer-events: none !important;"></div>
+                            ${gazeIndicatorHtml}
+                            <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none !important; width: 48px; height: 48px; z-index: 1000;" alt="Your location">
                         </div>
                     `;
 
                     const userIcon = L.divIcon({
                         html: markerHtml,
                         className: 'user-marker',
-                        iconSize: [50, 50],
-                        iconAnchor: [25, 25]
+                        iconSize: [200, 200],
+                        iconAnchor: [100, 100]
                     });
 
                     userMarker = L.marker([lat, lon], {
@@ -302,13 +310,14 @@ function showUserPosition() {
                     // Setup device orientation handling
                     if (window.DeviceOrientationEvent) {
                         window.addEventListener('deviceorientationabsolute', function(event) {
-                            const arrow = document.querySelector('.direction-arrow');
-                            if (arrow) {
+                            const cone = document.querySelector('.direction-cone');
+                            if (cone) {
                                 let direction = event.alpha || 0;
                                 if (window.orientation) {
                                     direction += window.orientation;
                                 }
-                                arrow.style.transform = `translate(-50%, -50%) rotate(${direction}deg)`;
+                                cone.style.transform = `rotate(${direction}deg)`;
+                                cone.style.transformOrigin = 'center center';
                             }
                         }, true);
                     }
