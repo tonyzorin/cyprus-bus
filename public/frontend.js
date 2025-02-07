@@ -8,7 +8,7 @@ let currentRoutePolyline = null;
 let userPosition = null;
 let isCompassAvailable = false;
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing map...');
     
     // Initialize map
@@ -28,6 +28,33 @@ document.addEventListener('DOMContentLoaded', function() {
         position: 'bottomright'
     }).addTo(map);
 
+    // Request compass permission immediately for iOS
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                isCompassAvailable = true;
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+        } catch (error) {
+            console.error('Error requesting compass permission:', error);
+        }
+    }
+    
+    // Request location permission
+    if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                showUserPosition();
+            },
+            function(error) {
+                console.error('Error getting initial position:', error);
+            },
+            { enableHighAccuracy: true }
+        );
+    }
+
     // Add locate control
     L.Control.Locate = L.Control.extend({
         onAdd: function(map) {
@@ -37,8 +64,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     <img src="images/location.png" alt="My Location" style="width: 24px; height: 24px;">
                 </a>
             `;
-            div.querySelector('a').addEventListener('click', function(e) {
+            
+            div.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
+                
+                // Handle iOS compass permission
+                if (typeof DeviceOrientationEvent.requestPermission === 'function' && isCompassAvailable) {
+                    try {
+                        const permission = await DeviceOrientationEvent.requestPermission();
+                        if (permission === 'granted') {
+                            // Add orientation listeners after permission is granted
+                            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                            window.addEventListener('deviceorientation', handleOrientation, true);
+                        }
+                    } catch (error) {
+                        console.error('Error requesting compass permission:', error);
+                    }
+                }
+                
+                // Always try to show position
                 showUserPosition();
             });
             return div;
@@ -58,6 +102,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Request user's position immediately
     showUserPosition();
+
+    // Check compass for non-iOS devices
+    // Request compass permission immediately for iOS
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                isCompassAvailable = true;
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+        } catch (error) {
+            console.error('Error requesting compass permission:', error);
+        }
+    }
+    
 });
 
 function setupNativeShare() {
@@ -145,28 +205,42 @@ function updateGTFSStatusUI(status) {
     if (!statusElement) return;
 
     let statusMessage;
+    let statusColor;
+
     if (status.gtfsStatus.toLowerCase() === 'available') {
         const lastUpdateTime = new Date(status.lastUpdateTime);
         const currentTime = new Date();
         const secondsAgo = Math.floor((currentTime - lastUpdateTime) / 1000);
         
-        let timeString;
-        if (secondsAgo < 3) {
-            timeString = "now";
-        } else if (secondsAgo < 10) {
-            timeString = "just now";
+        // If last update was more than 5 minutes ago, show as unavailable
+        if (secondsAgo > 300) {
+            statusMessage = '❌ Motion feed is not available';
+            statusColor = 'red';
+            pauseFetchingPositions();
         } else {
-            timeString = `${secondsAgo} seconds ago`;
+            let timeString;
+            if (secondsAgo < 3) {
+                timeString = "now";
+            } else if (secondsAgo < 10) {
+                timeString = "just now";
+            } else if (secondsAgo < 60) {
+                timeString = `${secondsAgo} seconds ago`;
+            } else {
+                const minutes = Math.floor(secondsAgo / 60);
+                timeString = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            }
+            
+            statusMessage = `Motion Status: OK ✅ Updated ${timeString}`;
+            statusColor = 'green';
         }
-        
-        statusMessage = `Motion Status: OK ✅ Updated ${timeString}`;
-        statusElement.style.color = 'green';
     } else {
-        statusMessage = '❌ Motion feed is not available.';
-        statusElement.style.color = 'red';
+        statusMessage = '❌ Motion feed is not available';
+        statusColor = 'red';
+        pauseFetchingPositions();
     }
 
     statusElement.textContent = statusMessage;
+    statusElement.style.color = statusColor;
 }
 
 // Add bus position fetching and updating functions
@@ -179,6 +253,17 @@ async function fetchBusPositions() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const positions = await response.json();
+
+        // Clear markers if no positions are available
+        if (!positions || !Array.isArray(positions) || positions.length === 0) {
+            Object.values(busMarkers).forEach(marker => {
+                if (map && marker) {
+                    map.removeLayer(marker);
+                }
+            });
+            busMarkers = {};
+            return;
+        }
 
         // Transform positions with correct data mapping
         const transformedPositions = positions.map(pos => ({
@@ -207,6 +292,13 @@ async function fetchBusPositions() {
         updateBusMarkers(transformedPositions);
     } catch (error) {
         console.error('Error fetching bus positions:', error);
+        // Clear markers on error
+        Object.values(busMarkers).forEach(marker => {
+            if (map && marker) {
+                map.removeLayer(marker);
+            }
+        });
+        busMarkers = {};
     }
 }
 
@@ -853,10 +945,11 @@ function moveMarkerSmoothly(marker, newPosition) {
 
 function checkCompassAvailability() {
     if (window.DeviceOrientationEvent) {
-        // Check if we can access device orientation
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             // iOS 13+ devices
-            isCompassAvailable = true;
+            isCompassAvailable = true;  // Device supports compass
+            // Request permission when location button is clicked
+            return true;
         } else {
             // Non iOS devices
             window.addEventListener('deviceorientation', function(event) {
@@ -867,65 +960,88 @@ function checkCompassAvailability() {
     return isCompassAvailable;
 }
 
-function initializeLocationAndCompass() {
-    // Check compass availability before creating the marker
-    checkCompassAvailability();
-    
-    navigator.geolocation.getCurrentPosition(function(position) {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        
-        userPosition = { lat, lon };
-        
-        if (typeof map !== 'undefined') {
-            if (userMarker) {
-                map.removeLayer(userMarker);
-            }
-            
-            const gazeIndicatorHtml = isCompassAvailable ? `
-                <div class="gaze-indicator" style="position: absolute; left: 0; top: 0; width: 200px; height: 200px; pointer-events: none;">
-                    <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="pointer-events: none;">
-                        <defs>
-                            <radialGradient id="coneGradient" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
-                                <stop offset="0%" style="stop-color:rgba(0, 0, 255, 0.4); stop-opacity:0.95;" />
-                                <stop offset="100%" style="stop-color:rgba(0, 0, 255, 0); stop-opacity:0;" />
-                            </radialGradient>
-                        </defs>
-                        <path d="M 100 100 L 70 20 L 130 20 Z" fill="url(#coneGradient)" class="direction-cone"/>
-                    </svg>
-                </div>
-            ` : '';
-            
-            const markerHtml = `
-                <div class="user-marker-container" style="position: relative; width: 200px; height: 200px; pointer-events: none !important;">
-                    <div class="beacon" style="position: absolute; left: 107px; top: 107px; transform: translate(-50%, -50%); pointer-events: none !important;"></div>
-                    ${gazeIndicatorHtml}
-                    <img src="images/current-location.png" class="user-icon" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none !important; width: 48px; height: 48px; z-index: 1000;" alt="Your location">
-                </div>
-            `;
-
-            const userIcon = L.divIcon({
-                html: markerHtml,
-                className: 'user-marker',
-                iconSize: [200, 200],
-                iconAnchor: [100, 100]
-            });
-
-            userMarker = L.marker([lat, lon], {
-                icon: userIcon,
-                zIndexOffset: 1000,
-                interactive: false
-            }).addTo(map);
-            
-            map.setView([lat, lon], 15);
-            fetchStops(false);
-
-            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            window.addEventListener('deviceorientation', handleOrientation, true);
+function handleOrientation(event) {
+    const cone = document.querySelector('.direction-cone');
+    if (cone) {
+        let direction = 0;
+        if (event.webkitCompassHeading) {
+            // iOS devices
+            direction = event.webkitCompassHeading;
+        } else if (event.alpha !== null) {
+            // Android devices
+            direction = 360 - event.alpha;
         }
-    }, handleLocationError, {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 5000
-    });
+        
+        // Adjust for screen orientation
+        if (window.orientation) {
+            direction += window.orientation;
+        }
+        
+        cone.style.transform = `rotate(${direction}deg)`;
+        cone.style.transformOrigin = 'center center';
+    }
+}
+
+function handleLocationError(error) {
+    let errorMessage = 'Unable to retrieve your location. ';
+    switch (error.code) {
+        case error.PERMISSION_DENIED:
+            errorMessage += 'User denied the request for location access.';
+            break;
+        case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Location information is unavailable.';
+            break;
+        case error.TIMEOUT:
+            errorMessage += 'The request to get user location timed out.';
+            break;
+        default:
+            errorMessage += 'An unknown error occurred.';
+    }
+    console.error(errorMessage, error);
+    alert(errorMessage);
+}
+
+// Add this new function
+async function requestCompassPermissions() {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                isCompassAvailable = true;
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+        } catch (error) {
+            console.error('Error requesting compass permission:', error);
+        }
+    }
+}
+
+// Add this function to handle compass initialization
+function initializeCompass() {
+    if (window.DeviceOrientationEvent) {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ devices - request permission immediately
+            DeviceOrientationEvent.requestPermission()
+                .then(permission => {
+                    if (permission === 'granted') {
+                        isCompassAvailable = true;
+                        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error requesting compass permission:', error);
+                });
+        } else {
+            // Non iOS devices
+            window.addEventListener('deviceorientation', function(event) {
+                isCompassAvailable = (event.alpha != null);
+                if (isCompassAvailable) {
+                    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                }
+            }, { once: true });
+        }
+    }
 }

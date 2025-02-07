@@ -20,6 +20,8 @@ services:
       - DB_DATABASE=${DB_DATABASE}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_PORT=${DB_PORT}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     container_name: cyprus-bus
     logging:
       driver: "json-file"

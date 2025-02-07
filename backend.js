@@ -59,30 +59,93 @@ app.listen(port, async () => {
     await initializeGTFS();
 });
 
-// Update the /api/gtfs-status endpoint
-app.get('/api/gtfs-status', (req, res) => {
-    const status = getGTFSStatus();
-    res.json({
-        gtfsStatus: status.available ? 'available' : 'unavailable',
-        lastUpdateTime: status.lastUpdateTime
-    });
-});
+// Add status tracking
+let lastGTFSStatus = null;
+let messageHistory = [];
+const MAX_MESSAGES_PER_HOUR = 10;
 
-function sendTelegramAlert(message) {
+function sendTelegramAlert(message, isTest = false) {
+    const now = Date.now();
+    const oneHourAgo = now - (60 * 60 * 1000);
+    
+    // Clean up old messages from history
+    messageHistory = messageHistory.filter(time => time > oneHourAgo);
+    
+    // Check rate limit (skip for test messages)
+    if (!isTest && messageHistory.length >= MAX_MESSAGES_PER_HOUR) {
+        console.log(`Rate limit reached (${MAX_MESSAGES_PER_HOUR} messages per hour). Message skipped:`, message);
+        return;
+    }
+    
+    // Skip if Telegram is not configured (optional integration)
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+        console.log("Telegram notifications not configured - skipping alert");
+        return;
+    }
+
     const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
     const params = {
-        chat_id: process.env.CHAT_ID,
+        chat_id: process.env.TELEGRAM_CHAT_ID,
         text: message,
+        parse_mode: 'HTML',
+        disable_notification: false
     };
 
     axios.post(url, params)
         .then((response) => {
-            console.log("Message sent to Telegram successfully:", response.data);
+            console.log("Telegram alert sent successfully");
+            if (!isTest) {
+                messageHistory.push(now);
+            }
         })
         .catch((error) => {
-            console.error("Failed to send message to Telegram:", error);
+            console.error("Failed to send Telegram alert:", error.response?.data || error.message);
         });
 }
+
+// Add a helper function for date formatting
+function formatDateTime(date) {
+    if (!date || date.getTime() < new Date('2000-01-01').getTime()) {
+        return null;
+    }
+    
+    return date.toLocaleString('en-GB', {
+        dateStyle: 'medium',
+        timeStyle: 'medium',
+        hour12: false
+    });
+}
+
+// Update the GTFS status endpoint
+app.get('/api/gtfs-status', (req, res) => {
+    const status = getGTFSStatus();
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const lastUpdateTime = new Date(status.lastUpdateTime);
+    
+    const currentStatus = (!status.available || lastUpdateTime < fiveMinutesAgo) ? 'unavailable' : 'available';
+    
+    // Only send notification if status has changed
+    if (currentStatus !== lastGTFSStatus) {
+        if (currentStatus === 'unavailable') {
+            const formattedTime = formatDateTime(lastUpdateTime);
+            const alertMessage = `🚨 GTFS Feed Alert`
+            sendTelegramAlert(alertMessage);
+        } else {
+            const formattedTime = formatDateTime(lastUpdateTime);
+            sendTelegramAlert(`✅ GTFS Feed Recovery:
+Status: Available${formattedTime ? `
+Last Update: ${formattedTime}` : ''}`);
+        }
+        
+        lastGTFSStatus = currentStatus;
+    }
+
+    res.json({
+        gtfsStatus: currentStatus,
+        lastUpdateTime: formatDateTime(lastUpdateTime),
+        message: currentStatus === 'available' ? 'GTFS feed is available' : 'GTFS feed is not available or outdated'
+    });
+});
 
 app.get('/', async (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -188,13 +251,24 @@ const fetchData = async (url, errorMessage) => {
 app.get('/api/vehicle-positions', async (req, res) => {
     try {
         const positionsDataObject = await readPositionsJson();
-        if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
-            // Log error only if logging is enabled
+        
+        // Check if data is too old (5 minutes)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        if (!positionsDataObject || 
+            !Array.isArray(positionsDataObject.entity) || 
+            new Date(positionsDataObject.timestamp) < fiveMinutesAgo) {
+            
             if (LOGGING_ENABLED) {
                 logger.error('GTFS data not available', { 
                     timestamp: new Date().toISOString(),
                     type: 'gtfs_unavailable'
                 });
+                
+                // Send Telegram alert about feed error
+                const currentTime = formatDateTime(new Date());
+                sendTelegramAlert(`🚨 Vehicle Positions Error:
+Status: No data available
+Time: ${currentTime}`);
             }
             res.status(503).json({ error: 'GTFS data is not available' });
             return;
@@ -297,14 +371,20 @@ app.get('/api/vehicle-positions', async (req, res) => {
 
         res.json(augmentedPositions.filter(position => position !== null));
     } catch (error) {
-        // Log error with details but without stack trace in production
         logger.error('Failed to fetch vehicle positions', {
             timestamp: new Date().toISOString(),
             type: 'vehicle_positions_error',
             message: error.message,
             ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
         });
-        res.status(500).json({ error: 'Failed to fetch vehicle positions' });
+        
+        // Send Telegram alert about the error
+        const currentTime = formatDateTime(new Date());
+        sendTelegramAlert(`🚨 Vehicle Positions Error:
+Error: ${error.message}
+Time: ${currentTime}`);
+        
+        res.status(503).json({ error: 'Failed to fetch vehicle positions' });
     }
 });
 
@@ -901,3 +981,38 @@ function cleanupOldLogs() {
 
 // Run cleanup daily
 setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000);
+
+// Update test endpoint to use formatted time
+app.get('/api/test-notification', async (req, res) => {
+    try {
+        if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+            const error = "Missing Telegram configuration";
+            console.error(error, {
+                TELEGRAM_BOT_TOKEN: !!process.env.TELEGRAM_BOT_TOKEN,
+                TELEGRAM_CHAT_ID: !!process.env.TELEGRAM_CHAT_ID
+            });
+            return res.status(500).json({ error });
+        }
+
+        const message = `🧪 Test notification from Cyprus Buses
+Time: ${formatDateTime(new Date())}`;
+        
+        // Pass isTest=true to bypass cooldown
+        sendTelegramAlert(message, true);
+        
+        res.json({ 
+            message: 'Test notification sent',
+            success: true
+        });
+    } catch (error) {
+        console.error('Failed to send test notification:', {
+            error: error.message,
+            response: error.response?.data
+        });
+        res.status(500).json({ 
+            error: 'Failed to send test notification', 
+            details: error.message,
+            telegramError: error.response?.data
+        });
+    }
+});
