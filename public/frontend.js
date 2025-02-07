@@ -7,6 +7,7 @@ let busStopMarkers = {};
 let currentRoutePolyline = null;
 let userPosition = null;
 let isCompassAvailable = false;
+let vehicleDetails = {};
 
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing map...');
@@ -158,11 +159,15 @@ async function initializeBusFeatures() {
     try {
         // Start GTFS status checks
         await fetchGTFSStatus();
-        setInterval(fetchGTFSStatus, 10000);
+        setInterval(fetchGTFSStatus, 5000);
+
+        // Load full vehicle details
+        await loadVehicleDetails();
+        setInterval(loadVehicleDetails, 5 * 60 * 1000); // Refresh details every 5 minutes
 
         // Start bus position updates
         await fetchBusPositions();
-        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
+        fetchPositionsInterval = setInterval(fetchBusPositions, 4000);
 
         // Add event listener for the show stops button
         const showStopsButton = document.getElementById('show-stops-button');
@@ -180,13 +185,11 @@ async function initializeBusFeatures() {
 async function fetchGTFSStatus() {
     try {
         const response = await fetch('/api/gtfs-status');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error('Failed to fetch GTFS status');
         const status = await response.json();
         updateGTFSStatusUI(status);
         
-        if (status.gtfsStatus.toLowerCase() === 'available') {
+        if (status.gtfsStatus === 'available') {
             if (isFetchingPaused) {
                 resumeFetchingPositions();
             }
@@ -195,7 +198,7 @@ async function fetchGTFSStatus() {
         }
     } catch (error) {
         console.error('Error fetching GTFS status:', error);
-        updateGTFSStatusUI({gtfsStatus: 'unavailable', lastUpdateTime: null});
+        updateGTFSStatusUI({ gtfsStatus: 'unavailable' });
         pauseFetchingPositions();
     }
 }
@@ -204,111 +207,78 @@ function updateGTFSStatusUI(status) {
     const statusElement = document.getElementById('gtfs-status');
     if (!statusElement) return;
 
-    let statusMessage;
-    let statusColor;
-
-    if (status.gtfsStatus.toLowerCase() === 'available') {
-        const lastUpdateTime = new Date(status.lastUpdateTime);
-        const currentTime = new Date();
-        const secondsAgo = Math.floor((currentTime - lastUpdateTime) / 1000);
-        
-        // If last update was more than 5 minutes ago, show as unavailable
-        if (secondsAgo > 300) {
-            statusMessage = '❌ Motion feed is not available';
-            statusColor = 'red';
-            pauseFetchingPositions();
-        } else {
-            let timeString;
-            if (secondsAgo < 3) {
-                timeString = "now";
-            } else if (secondsAgo < 10) {
-                timeString = "just now";
-            } else if (secondsAgo < 60) {
-                timeString = `${secondsAgo} seconds ago`;
-            } else {
-                const minutes = Math.floor(secondsAgo / 60);
-                timeString = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-            }
-            
-            statusMessage = `Motion Status: OK ✅ Updated ${timeString}`;
-            statusColor = 'green';
-        }
+    if (status.gtfsStatus === 'available') {
+        statusElement.textContent = 'Motion Status: OK ✅';
+        statusElement.style.color = 'green';
     } else {
-        statusMessage = '❌ Motion feed is not available';
-        statusColor = 'red';
-        pauseFetchingPositions();
+        statusElement.textContent = '❌ Motion feed is not available';
+        statusElement.style.color = 'red';
     }
-
-    statusElement.textContent = statusMessage;
-    statusElement.style.color = statusColor;
 }
 
-// Add bus position fetching and updating functions
+async function loadVehicleDetails() {
+    try {
+        const response = await fetch('/api/vehicle-details');
+        if (!response.ok) throw new Error('Failed to fetch vehicle details');
+        const details = await response.json();
+        
+        console.log('Loaded vehicle details:', details.length, 'vehicles');
+        
+        // Create a map of vehicle details by ID
+        vehicleDetails = details.reduce((acc, detail) => {
+            acc[detail.id] = detail;
+            return acc;
+        }, {});
+
+        console.log('Vehicle details mapped:', Object.keys(vehicleDetails).length, 'entries');
+    } catch (error) {
+        console.error('Error loading vehicle details:', error);
+    }
+}
+
 async function fetchBusPositions() {
     if (isFetchingPaused) return;
 
     try {
-        const response = await fetch('/api/vehicle-positions');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // Add timestamp to URL to prevent caching
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/vehicle-positions/minimal?_=${timestamp}`);
+        if (!response.ok) throw new Error('Failed to fetch positions');
         const positions = await response.json();
 
-        // Clear markers if no positions are available
-        if (!positions || !Array.isArray(positions) || positions.length === 0) {
-            Object.values(busMarkers).forEach(marker => {
-                if (map && marker) {
-                    map.removeLayer(marker);
-                }
-            });
-            busMarkers = {};
-            return;
-        }
-
-        // Transform positions with correct data mapping
-        const transformedPositions = positions.map(pos => ({
-            vehicle_id: pos.vehicle?.vehicle?.id,
-            latitude: pos.vehicle?.position?.latitude,
-            longitude: pos.vehicle?.position?.longitude,
-            bearing: pos.bearing || 0,
-            speed: pos.speed || 0,
-            route_short_name: pos.routeShortName,
-            trip_headsign: pos.routeLongName,
-            license_plate: pos.vehicle?.vehicle?.licensePlate,
-            timestamp: pos.vehicle?.timestamp?.low || pos.vehicle?.timestamp,
-            route_color: pos.routeColor,
-            route_text_color: pos.routeTextColor,
-            routeId: pos.routeId
-        })).filter(pos => {
-            // Filter out positions with invalid coordinates (0,0 or null)
-            const isValid = pos.latitude && 
-                          pos.longitude && 
-                          pos.vehicle_id &&
-                          pos.latitude !== 0 &&
-                          pos.longitude !== 0;
-            return isValid;
-        });
+        // Transform minimal positions into the format expected by updateBusMarkers
+        const transformedPositions = positions.map(pos => {
+            const details = vehicleDetails[pos.id] || {};
+            return {
+                vehicle_id: pos.id,
+                latitude: pos.lat,
+                longitude: pos.lon,
+                bearing: pos.bearing || 0,
+                route_short_name: details.routeInfo?.shortName || '?',
+                trip_headsign: details.routeInfo?.longName || 'Unknown Route',
+                license_plate: details.vehicleInfo?.licensePlate || '',
+                route_color: details.routeInfo?.color || '000000',
+                route_text_color: details.routeInfo?.textColor || 'FFFFFF',
+                routeId: pos.routeId
+            };
+        }).filter(pos => pos.latitude && pos.longitude && pos.vehicle_id);
 
         updateBusMarkers(transformedPositions);
     } catch (error) {
         console.error('Error fetching bus positions:', error);
-        // Clear markers on error
-        Object.values(busMarkers).forEach(marker => {
-            if (map && marker) {
-                map.removeLayer(marker);
-            }
-        });
-        busMarkers = {};
     }
 }
 
 function pauseFetchingPositions() {
     if (!isFetchingPaused) {
         isFetchingPaused = true;
+        
+        // Clear the interval
         if (fetchPositionsInterval) {
             clearInterval(fetchPositionsInterval);
             fetchPositionsInterval = null;
         }
+        
         // Clear existing bus markers
         Object.values(busMarkers).forEach(marker => {
             if (map && marker) {
@@ -322,8 +292,18 @@ function pauseFetchingPositions() {
 function resumeFetchingPositions() {
     if (isFetchingPaused) {
         isFetchingPaused = false;
+        
+        // Clear any existing interval first
+        if (fetchPositionsInterval) {
+            clearInterval(fetchPositionsInterval);
+            fetchPositionsInterval = null;
+        }
+        
+        // Fetch immediately
         fetchBusPositions();
-        fetchPositionsInterval = setInterval(fetchBusPositions, 3000);
+        
+        // Set new interval
+        fetchPositionsInterval = setInterval(fetchBusPositions, 4000);
     }
 }
 
@@ -530,34 +510,71 @@ async function createNewMarker(latitude, longitude, markerIcon, entity) {
 }
 
 function updateBusMarkers(positions) {
-    // Remove old markers that are no longer present in the new data
-    Object.keys(busMarkers).forEach(vehicleId => {
-        if (!positions.find(pos => pos.vehicle_id === vehicleId)) {
-            if (map && busMarkers[vehicleId]) {
-                map.removeLayer(busMarkers[vehicleId]);
-                delete busMarkers[vehicleId];
+    const activeMarkers = new Set(positions.map(pos => pos.vehicle_id));
+
+    // First update existing markers
+    positions.forEach(position => {
+        const { vehicle_id, latitude, longitude, bearing } = position;
+        
+        if (busMarkers[vehicle_id]) {
+            // Update existing marker
+            const marker = busMarkers[vehicle_id];
+            const newLatLng = L.latLng(latitude, longitude);
+            
+            // Only move if position has changed significantly
+            if (marker.getLatLng().distanceTo(newLatLng) > 1) {
+                moveMarkerSmoothly(marker, newLatLng);
+                
+                // Update the bus icon rotation
+                const busIcon = marker.getElement()?.querySelector('img[src="/images/pins/bus.svg"]');
+                if (busIcon) {
+                    busIcon.style.transform = `translate(-50%, 50%) rotate(${bearing}deg)`;
+                }
             }
+
+            // Update popup content if popup exists
+            const popup = marker.getPopup();
+            if (popup) {
+                popup.setContent(createBusPopupContent(position));
+            }
+        } else {
+            // Create new marker
+            createNewMarker(latitude, longitude, null, position);
         }
     });
 
-    // Update or add new markers
-    Promise.all(positions.map(async pos => {
-        const latitude = pos.latitude;
-        const longitude = pos.longitude;
-        
-        if (latitude && longitude) {
-            if (busMarkers[pos.vehicle_id]) {
-                // Move existing marker smoothly
-                moveMarkerSmoothly(busMarkers[pos.vehicle_id], [latitude, longitude]);
-                // Update marker icon and popup
-                const marker = await createNewMarker(latitude, longitude, null, pos);
-                busMarkers[pos.vehicle_id] = marker;
-            } else {
-                // Create new marker
-                await createNewMarker(latitude, longitude, null, pos);
+    // Remove inactive markers
+    Object.keys(busMarkers).forEach(markerId => {
+        if (!activeMarkers.has(markerId)) {
+            if (map && busMarkers[markerId]) {
+                map.removeLayer(busMarkers[markerId]);
+                delete busMarkers[markerId];
             }
         }
-    }));
+    });
+}
+
+function moveMarkerSmoothly(marker, newLatLng) {
+    const startLatLng = marker.getLatLng();
+    const startTime = Date.now();
+    const duration = 4000; // Match the update interval
+
+    function animate() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Interpolate position
+        const lat = startLatLng.lat + (newLatLng.lat - startLatLng.lat) * progress;
+        const lng = startLatLng.lng + (newLatLng.lng - startLatLng.lng) * progress;
+        
+        marker.setLatLng([lat, lng]);
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+
+    animate();
 }
 
 function createBusPopupContent(busData) {
@@ -611,64 +628,96 @@ function createBusPopupContent(busData) {
 // Include all the route and stop related functions from the original file
 // ... (rest of the original functions)
 
-function fetchStops(useMapBounds = false) {
+async function fetchStops(useMapBounds = false) {
     if (!map) {
         console.warn('Map is not initialized yet.');
         return;
     }
 
-    console.log('Fetching stops...');
-    fetch('/api/stops')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+    try {
+        // Try to get from localStorage first
+        const cachedStops = localStorage.getItem('busStops');
+        const cacheTimestamp = localStorage.getItem('busStopsTimestamp');
+        const CACHE_DURATION = 365 * 24 * 60 * 60 * 1000; // 365 days in milliseconds
+
+        let stops;
+        if (cachedStops && cacheTimestamp) {
+            const isExpired = Date.now() - parseInt(cacheTimestamp) > CACHE_DURATION;
+            if (!isExpired) {
+                console.log('Using cached stops data');
+                stops = JSON.parse(cachedStops);
             }
-            return response.json();
-        })
-        .then(stops => {
-            console.log(`Received ${stops.length} stops`);
-            Object.values(busStopMarkers).forEach(marker => map.removeLayer(marker));
-            busStopMarkers = {};
+        }
 
-            let filteredStops;
-            if (useMapBounds) {
-                const bounds = map.getBounds();
-                filteredStops = stops.filter(stop => {
-                    const lat = parseFloat(stop.lat);
-                    const lon = parseFloat(stop.lon);
-                    return lat >= bounds.getSouth() && 
-                           lat <= bounds.getNorth() &&
-                           lon >= bounds.getWest() && 
-                           lon <= bounds.getEast();
-                });
-            } else {
-                filteredStops = stops.filter(stop => {
-                    if (!userPosition) return false;
-                    const distance = getDistanceFromLatLonInKm(
-                        userPosition.lat, userPosition.lon, 
-                        parseFloat(stop.lat), parseFloat(stop.lon)
-                    );
-                    return distance <= 2;
-                });
-            }
+        if (!stops) {
+            // Fetch from server if no cache
+            const response = await fetch('/api/stops');
+            if (!response.ok) throw new Error('Failed to fetch stops');
+            stops = await response.json();
 
-            console.log(`Filtered to ${filteredStops.length} stops`);
-            filteredStops.forEach(stop => {
-                const marker = L.marker([stop.lat, stop.lon], {
-                    icon: L.icon({
-                        iconUrl: './images/bus-stop.png',
-                        iconSize: [14, 14],
-                        iconAnchor: [7, 7],
-                        popupAnchor: [0, -7]
-                    })
-                }).addTo(map);
+            // Update localStorage
+            localStorage.setItem('busStops', JSON.stringify(stops));
+            localStorage.setItem('busStopsTimestamp', Date.now().toString());
+        }
 
-                marker.bindPopup(`<div style="min-width: 300px;"><b>${stop.name}</b><br>Stop ID: ${stop.stop_id}<br><div id="stop-${stop.stop_id}-buses">Loading...</div></div>`);
-                marker.on('click', () => fetchStopInfo(stop.stop_id));
-                busStopMarkers[stop.stop_id] = marker;
+        let filteredStops;
+        if (useMapBounds) {
+            // Filter stops within current map bounds
+            const bounds = map.getBounds();
+            filteredStops = stops.filter(stop => {
+                const lat = parseFloat(stop.lat);
+                const lon = parseFloat(stop.lon);
+                return lat >= bounds.getSouth() && 
+                       lat <= bounds.getNorth() &&
+                       lon >= bounds.getWest() && 
+                       lon <= bounds.getEast();
             });
-        })
-        .catch(error => console.error('Error fetching stops:', error));
+            console.log(`Showing ${filteredStops.length} stops in visible area`);
+        } else if (userPosition) {
+            // Filter stops within 3km of user position
+            filteredStops = stops.filter(stop => {
+                const distance = getDistanceFromLatLonInKm(
+                    userPosition.lat, 
+                    userPosition.lon, 
+                    parseFloat(stop.lat), 
+                    parseFloat(stop.lon)
+                );
+                return distance <= 3;
+            });
+            console.log(`Showing ${filteredStops.length} stops within 3km`);
+        } else {
+            console.warn('No user position available for nearby stops');
+            return;
+        }
+
+        displayStops(filteredStops);
+    } catch (error) {
+        console.error('Error fetching stops:', error);
+    }
+}
+
+function displayStops(stops) {
+    // Clear existing stop markers
+    Object.values(busStopMarkers).forEach(marker => {
+        if (map) map.removeLayer(marker);
+    });
+    busStopMarkers = {};
+
+    // Add markers for each stop
+    stops.forEach(stop => {
+        const marker = L.marker([stop.lat, stop.lon], {
+            icon: L.icon({
+                iconUrl: './images/bus-stop.png',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7],
+                popupAnchor: [0, -7]
+            })
+        }).addTo(map);
+
+        marker.bindPopup(`<div style="min-width: 300px;"><b>${stop.name}</b><br>Stop ID: ${stop.stop_id}<br><div id="stop-${stop.stop_id}-buses">Loading...</div></div>`);
+        marker.on('click', () => fetchStopInfo(stop.stop_id));
+        busStopMarkers[stop.stop_id] = marker;
+    });
 }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
@@ -920,29 +969,6 @@ function setupButtons() {
     }
 }
 
-function moveMarkerSmoothly(marker, newPosition) {
-    const currentLatLng = marker.getLatLng();
-    const newLatLng = L.latLng(newPosition);
-    const distance = currentLatLng.distanceTo(newLatLng);
-    const steps = Math.min(20, Math.max(10, distance / 10)); // Adjust steps based on distance
-    const stepLat = (newLatLng.lat - currentLatLng.lat) / steps;
-    const stepLng = (newLatLng.lng - currentLatLng.lng) / steps;
-
-    let i = 0;
-    const interval = setInterval(() => {
-        if (i < steps) {
-            i++;
-            marker.setLatLng([
-                currentLatLng.lat + (stepLat * i), 
-                currentLatLng.lng + (stepLng * i)
-            ]);
-        } else {
-            clearInterval(interval);
-            marker.setLatLng(newLatLng); // Ensure marker ends exactly at the new position
-        }
-    }, 50);
-}
-
 function checkCompassAvailability() {
     if (window.DeviceOrientationEvent) {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -1044,4 +1070,95 @@ function initializeCompass() {
             }, { once: true });
         }
     }
+}
+
+async function updateBusMarker(position, details) {
+    const { id, lat, lon, bearing, routeId } = position;
+    const routeInfo = details?.routeInfo || {};
+    
+    if (!id || !lat || !lon) {
+        console.log('Invalid position data:', position);
+        return;
+    }
+
+    console.log('Updating bus marker:', id, 'at', lat, lon);
+
+    const markerData = {
+        vehicle_id: id,
+        latitude: lat,
+        longitude: lon,
+        bearing: bearing || 0,
+        route_short_name: routeInfo.shortName || '?',
+        route_color: routeInfo.color || '000000',
+        route_text_color: routeInfo.textColor || 'FFFFFF',
+        license_plate: details?.vehicleInfo?.licensePlate || '',
+        trip_headsign: routeInfo.longName || 'Unknown Route',
+        routeId: routeId
+    };
+
+    // Update or create marker
+    if (busMarkers[id]) {
+        console.log('Updating existing marker:', id);
+        // Update existing marker
+        const marker = busMarkers[id];
+        const newLatLng = L.latLng(lat, lon);
+        
+        if (marker.getLatLng().distanceTo(newLatLng) > 1) {
+            moveMarkerSmoothly(marker, newLatLng);
+        }
+        
+        // Update popup content
+        const popupContent = createBusPopupContent(markerData);
+        marker.getPopup()?.setContent(popupContent);
+        
+        // Update icon rotation
+        const icon = marker.getIcon();
+        icon.options.rotationAngle = bearing;
+        marker.setIcon(icon);
+    } else {
+        console.log('Creating new marker:', id);
+        // Create new marker
+        createBusMarker(markerData);
+    }
+}
+
+function createBusMarker(data) {
+    if (!map) {
+        console.error('Map not initialized');
+        return;
+    }
+
+    console.log('Creating bus marker with data:', data);
+
+    const marker = L.marker([data.latitude, data.longitude], {
+        icon: L.divIcon({
+            className: 'bus-marker',
+            html: `
+                <div class="bus-icon" style="background-color: #${data.route_color}; color: #${data.route_text_color};">
+                    ${data.route_short_name}
+                </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
+            popupAnchor: [0, -15]
+        }),
+        rotationAngle: data.bearing || 0
+    }).addTo(map);
+
+    // Create popup content
+    const popupContent = createBusPopupContent(data);
+    marker.bindPopup(popupContent);
+
+    // Add click handler for route display
+    marker.on('click', () => {
+        if (data.routeId) {
+            onBusMarkerClick(data.routeId);
+        }
+    });
+
+    // Store marker reference
+    busMarkers[data.vehicle_id] = marker;
+
+    console.log('Marker created and added to map');
+    return marker;
 }

@@ -152,13 +152,57 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/api/stops', async (req, res) => {
+    // Set cache headers for 24 hours
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Expires', new Date(Date.now() + 86400000).toUTCString());
+
     try {
-        const result = await query('SELECT * FROM stops');
-        if (!result.rows) throw new Error('No data found');
+        // Get bounds or center point from query parameters
+        const { bounds, lat, lon, limit = '50' } = req.query;
+        const stopLimit = parseInt(limit);
+        
+        let whereClause = `
+            WHERE 
+                lat IS NOT NULL 
+                AND lon IS NOT NULL
+                AND CAST(lat AS FLOAT) != 0 
+                AND CAST(lon AS FLOAT) != 0
+        `;
+
+        if (bounds) {
+            const [south, west, north, east] = bounds.split(',').map(Number);
+            whereClause += `
+                AND CAST(lat AS FLOAT) >= ${south}
+                AND CAST(lat AS FLOAT) <= ${north}
+                AND CAST(lon AS FLOAT) >= ${west}
+                AND CAST(lon AS FLOAT) <= ${east}
+            `;
+        } else if (lat && lon) {
+            whereClause += `
+                AND earth_box(ll_to_earth(${lat}, ${lon}), 3000) @> ll_to_earth(CAST(lat AS FLOAT), CAST(lon AS FLOAT))
+            `;
+        }
+
+        const result = await query(`
+            SELECT 
+                CAST(stop_id AS TEXT) as stop_id,
+                name,
+                CAST(lat AS FLOAT) as lat,
+                CAST(lon AS FLOAT) as lon
+            FROM stops
+            ${whereClause}
+            ORDER BY CAST(stop_id AS INTEGER)
+            LIMIT ${stopLimit}
+        `);
+
+        console.log(`Fetched ${result.rows.length} stops`);
         res.json(result.rows);
     } catch (err) {
-        console.error('Error fetching stops:', err.message);
-        res.status(500).json({ error: 'Internal server error fetching stops', details: err.message });
+        console.error('Error fetching stops:', err);
+        res.status(500).json({ 
+            error: 'Failed to fetch stops',
+            details: err.message
+        });
     }
 });
 
@@ -247,45 +291,53 @@ const fetchData = async (url, errorMessage) => {
     }
 };
 
-// Update the /api/vehicle-positions endpoint
-app.get('/api/vehicle-positions', async (req, res) => {
+// Add cache control headers to prevent caching of vehicle positions
+app.get('/api/vehicle-positions/minimal', async (req, res) => {
+    // Set no-cache headers
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+    
     try {
         const positionsDataObject = await readPositionsJson();
         
-        // Check if data is too old (5 minutes)
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-        if (!positionsDataObject || 
-            !Array.isArray(positionsDataObject.entity) || 
-            new Date(positionsDataObject.timestamp) < fiveMinutesAgo) {
-            
-            if (LOGGING_ENABLED) {
-                logger.error('GTFS data not available', { 
-                    timestamp: new Date().toISOString(),
-                    type: 'gtfs_unavailable'
-                });
-                
-                // Send Telegram alert about feed error
-                const currentTime = formatDateTime(new Date());
-                sendTelegramAlert(`🚨 Vehicle Positions Error:
-Status: No data available
-Time: ${currentTime}`);
-            }
+        if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
             res.status(503).json({ error: 'GTFS data is not available' });
             return;
         }
 
-        const positionsData = positionsDataObject.entity;
+        // Return only essential data for each vehicle
+        const minimalPositions = positionsDataObject.entity.map(position => ({
+            id: position.vehicle?.vehicle?.id,
+            lat: position.vehicle?.position?.latitude,
+            lon: position.vehicle?.position?.longitude,
+            bearing: position.vehicle?.position?.bearing || 0,
+            routeId: position.vehicle?.trip?.routeId
+        })).filter(pos => pos.id && pos.lat && pos.lon);
 
-        const augmentedPositions = await Promise.all(positionsData.map(async (position) => {
-            if (!position.vehicle || !position.vehicle.trip) {
-                // Log warning only if logging is enabled and it's not a common occurrence
-                if (LOGGING_ENABLED && Math.random() < 0.1) { // Log only 10% of these warnings
-                    console.warn('Skipping position due to missing vehicle or trip data');
-                }
-                return null;
-            }
+        res.json(minimalPositions);
+    } catch (err) {
+        console.error('Error fetching minimal positions:', err);
+        res.status(500).json({ error: 'Failed to fetch positions' });
+    }
+});
 
-            const routeId = position.vehicle.trip.routeId;
+// New endpoint for full vehicle details
+app.get('/api/vehicle-details', async (req, res) => {
+    try {
+        const positionsDataObject = await readPositionsJson();
+        
+        if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
+            res.status(503).json({ error: 'GTFS data is not available' });
+            return;
+        }
+
+        // Get full details including route information
+        const fullDetails = await Promise.all(positionsDataObject.entity.map(async (position) => {
+            const routeId = position.vehicle?.trip?.routeId;
+            if (!routeId) return null;
+
             const routeDetailsResult = await query(
                 `SELECT route_short_name, route_long_name, route_color, route_text_color 
                  FROM routes 
@@ -293,98 +345,34 @@ Time: ${currentTime}`);
                 [routeId]
             );
 
-            if (routeDetailsResult.rows.length > 0) {
-                const routeDetails = routeDetailsResult.rows[0];
-                return {
-                    id: position.id,
-                    vehicle: {
-                        trip: {
-                            tripId: position.vehicle.trip.tripId,
-                            startTime: position.vehicle.trip.startTime,
-                            startDate: position.vehicle.trip.startDate,
-                            scheduleRelationship: position.vehicle.trip.scheduleRelationship,
-                            routeId: position.vehicle.trip.routeId,
-                            directionId: position.vehicle.trip.directionId
-                        },
-                        position: {
-                            latitude: position.vehicle.position.latitude,
-                            longitude: position.vehicle.position.longitude,
-                            bearing: position.vehicle.position.bearing || 0,
-                            speed: position.vehicle.position.speed || 0
-                        },
-                        currentStopSequence: position.vehicle.currentStopSequence,
-                        currentStatus: position.vehicle.currentStatus,
-                        timestamp: position.vehicle.timestamp.low,
-                        stopId: position.vehicle.stopId,
-                        vehicle: {
-                            id: position.vehicle.vehicle.id,
-                            label: position.vehicle.vehicle.label,
-                            licensePlate: position.vehicle.vehicle.licensePlate
-                        }
-                    },
-                    routeShortName: routeDetails.route_short_name,
-                    routeLongName: routeDetails.route_long_name,
-                    routeId: routeId,
-                    routeColor: routeDetails.route_color,
-                    routeTextColor: routeDetails.route_text_color,
-                    bearing: position.vehicle.position.bearing || 0,
-                    speed: Math.round(position.vehicle.position.speed) || 0
-                };
-            } else {
-                return {
-                    id: position.id,
-                    vehicle: {
-                        trip: {
-                            tripId: position.vehicle.trip.tripId,
-                            startTime: position.vehicle.trip.startTime,
-                            startDate: position.vehicle.trip.startDate,
-                            scheduleRelationship: position.vehicle.trip.scheduleRelationship,
-                            routeId: "0",
-                            directionId: position.vehicle.trip.directionId
-                        },
-                        position: {
-                            latitude: position.vehicle.position.latitude,
-                            longitude: position.vehicle.position.longitude,
-                            bearing: position.vehicle.position.bearing || 0,
-                            speed: position.vehicle.position.speed || 0
-                        },
-                        currentStopSequence: position.vehicle.currentStopSequence,
-                        currentStatus: position.vehicle.currentStatus,
-                        timestamp: position.vehicle.timestamp.low,
-                        stopId: position.vehicle.stopId,
-                        vehicle: {
-                            id: position.vehicle.vehicle.id,
-                            label: position.vehicle.vehicle.label,
-                            licensePlate: position.vehicle.vehicle.licensePlate
-                        }
-                    },
-                    routeShortName: "?",
-                    routeLongName: "Unknown Route",
-                    routeId: "0",
-                    routeColor: "000000",
-                    routeTextColor: "FFFFFF",
-                    bearing: position.vehicle.position.bearing || 0,
-                    speed: Math.round(position.vehicle.position.speed) || 0
-                };
-            }
+            if (routeDetailsResult.rows.length === 0) return null;
+
+            const routeDetails = routeDetailsResult.rows[0];
+            return {
+                id: position.vehicle?.vehicle?.id,
+                vehicleInfo: {
+                    label: position.vehicle?.vehicle?.label,
+                    licensePlate: position.vehicle?.vehicle?.licensePlate
+                },
+                tripInfo: {
+                    tripId: position.vehicle?.trip?.tripId,
+                    startTime: position.vehicle?.trip?.startTime,
+                    startDate: position.vehicle?.trip?.startDate,
+                    routeId: routeId
+                },
+                routeInfo: {
+                    shortName: routeDetails.route_short_name,
+                    longName: routeDetails.route_long_name,
+                    color: routeDetails.route_color,
+                    textColor: routeDetails.route_text_color
+                }
+            };
         }));
 
-        res.json(augmentedPositions.filter(position => position !== null));
-    } catch (error) {
-        logger.error('Failed to fetch vehicle positions', {
-            timestamp: new Date().toISOString(),
-            type: 'vehicle_positions_error',
-            message: error.message,
-            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
-        });
-        
-        // Send Telegram alert about the error
-        const currentTime = formatDateTime(new Date());
-        sendTelegramAlert(`🚨 Vehicle Positions Error:
-Error: ${error.message}
-Time: ${currentTime}`);
-        
-        res.status(503).json({ error: 'Failed to fetch vehicle positions' });
+        res.json(fullDetails.filter(detail => detail !== null));
+    } catch (err) {
+        console.error('Error fetching vehicle details:', err);
+        res.status(500).json({ error: 'Failed to fetch vehicle details' });
     }
 });
 
@@ -392,39 +380,42 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
         
-        // Validate routeId
-        if (!routeId || isNaN(parseInt(routeId))) {
-            console.log('Invalid route ID:', routeId);
-            return res.status(400).json({ error: 'Invalid route ID' });
-        }
+        // First get the route color and a valid shape_id for this route
+        const routeQuery = await query(`
+            SELECT DISTINCT 
+                routes.route_color,
+                trips.shape_id
+            FROM routes
+            JOIN trips ON routes."routeId" = trips."routeId"
+            WHERE routes."routeId" = $1
+            LIMIT 1
+        `, [parseInt(routeId)]);
 
-        console.log('Fetching shape for route ID:', routeId);
-
-        // First, let's check if the route exists
-        const routeCheck = await query(
-            'SELECT "routeId", route_short_name FROM routes WHERE "routeId" = $1',
-            [parseInt(routeId)]
-        );
-        
-        if (routeCheck.rows.length === 0) {
+        if (routeQuery.rows.length === 0) {
             console.log('Route not found:', routeId);
             return res.status(404).json({ error: 'Route not found' });
         }
 
-        const result = await query(`
-            SELECT 
-                shapes.shape_pt_lat, 
-                shapes.shape_pt_lon, 
-                routes.route_color,
-                shapes.shape_pt_sequence
-            FROM shapes 
-            JOIN trips ON shapes.shape_id = trips.shape_id
-            JOIN routes ON trips."routeId" = routes."routeId"
-            WHERE routes."routeId" = $1 
-            ORDER BY shapes.shape_pt_sequence ASC
-        `, [parseInt(routeId)]);
+        const { route_color, shape_id } = routeQuery.rows[0];
 
-        res.json(result.rows);
+        // Then get just the shape points for this shape
+        const shapePoints = await query(`
+            SELECT 
+                shape_pt_lat, 
+                shape_pt_lon,
+                shape_pt_sequence
+            FROM shapes 
+            WHERE shape_id = $1
+            ORDER BY shape_pt_sequence ASC
+        `, [shape_id]);
+
+        // Add the route color to each point
+        const result = shapePoints.rows.map(point => ({
+            ...point,
+            route_color
+        }));
+
+        res.json(result);
     } catch (err) {
         console.error('Error fetching route shapes:', err);
         res.status(500).json({ 
