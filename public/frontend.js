@@ -387,16 +387,19 @@ function showUserPosition() {
                                 let direction = 0;
                                 if (event.webkitCompassHeading) {
                                     // iOS devices
-                                    direction = event.webkitCompassHeading;
+                                    direction = event.webkitCompassHeading + 135;
                                 } else if (event.alpha !== null) {
                                     // Android devices
-                                    direction = 360 - event.alpha;
+                                    direction = (360 - event.alpha) + 135;
                                 }
                                 
                                 // Adjust for screen orientation
                                 if (window.orientation) {
                                     direction += window.orientation;
                                 }
+                                
+                                // Normalize direction to stay within 0-360 range
+                                direction = direction % 360;
                                 
                                 cone.style.transform = `rotate(${direction}deg)`;
                                 cone.style.transformOrigin = 'center center';
@@ -407,10 +410,12 @@ function showUserPosition() {
                         window.addEventListener('deviceorientation', function(event) {
                             const cone = document.querySelector('.direction-cone');
                             if (cone && event.alpha !== null) {
-                                let direction = 360 - event.alpha;
+                                let direction = (360 - event.alpha) + 135;
                                 if (window.orientation) {
                                     direction += window.orientation;
                                 }
+                                // Normalize direction to stay within 0-360 range
+                                direction = direction % 360;
                                 cone.style.transform = `rotate(${direction}deg)`;
                                 cone.style.transformOrigin = 'center center';
                             }
@@ -992,16 +997,19 @@ function handleOrientation(event) {
         let direction = 0;
         if (event.webkitCompassHeading) {
             // iOS devices
-            direction = event.webkitCompassHeading;
+            direction = event.webkitCompassHeading + 90;
         } else if (event.alpha !== null) {
             // Android devices
-            direction = 360 - event.alpha;
+            direction = (360 - event.alpha) + 90;
         }
         
         // Adjust for screen orientation
         if (window.orientation) {
             direction += window.orientation;
         }
+        
+        // Normalize direction to stay within 0-360 range
+        direction = direction % 360;
         
         cone.style.transform = `rotate(${direction}deg)`;
         cone.style.transformOrigin = 'center center';
