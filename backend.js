@@ -211,7 +211,7 @@ app.get('/api/routes-for-stop/:stopId', async (req, res) => {
     try {
         const queryText = `
             SELECT DISTINCT
-                routes."routeId",
+                routes."route_id",
                 routes.agency_id,
                 routes.route_short_name,
                 routes.route_long_name,
@@ -223,9 +223,9 @@ app.get('/api/routes-for-stop/:stopId', async (req, res) => {
             FROM
                 routes
                     JOIN
-                trips ON routes."routeId" = trips."routeId"
+                trips ON routes."route_id" = trips."route_id"
                     JOIN
-                stop_times ON trips."tripId" = stop_times.trip_id
+                stop_times ON trips."trip_id" = stop_times.trip_id
             WHERE
                 stop_times.stop_id = $1
         `;
@@ -251,8 +251,8 @@ app.get('/api/stop-times/:stopId', async (req, res) => {
                 stop_times.arrival_time
             FROM
                 stop_times
-                JOIN trips ON stop_times.trip_id = trips."tripId"
-                JOIN routes ON trips."routeId" = routes."routeId"
+                JOIN trips ON stop_times.trip_id = trips."trip_id"
+                JOIN routes ON trips."route_id" = routes."route_id"
             WHERE
                 stop_times.stop_id = $1
             ORDER BY
@@ -341,7 +341,7 @@ app.get('/api/vehicle-details', async (req, res) => {
             const routeDetailsResult = await query(
                 `SELECT route_short_name, route_long_name, route_color, route_text_color 
                  FROM routes 
-                 WHERE "routeId" = $1`,
+                 WHERE route_id = $1`,
                 [routeId]
             );
 
@@ -386,8 +386,8 @@ app.get('/api/route-shapes/:routeId', async (req, res) => {
                 routes.route_color,
                 trips.shape_id
             FROM routes
-            JOIN trips ON routes."routeId" = trips."routeId"
-            WHERE routes."routeId" = $1
+            JOIN trips ON routes.route_id = trips.route_id
+            WHERE routes.route_id = $1
             LIMIT 1
         `, [parseInt(routeId)]);
 
@@ -440,7 +440,7 @@ function createTimetablesHandler(fetchData, url) {
 async function getRouteDetails(routeShortName) {
     try {
         const result = await query(
-            'SELECT route_short_name, trip_headsign, route_color, route_text_color FROM routes JOIN trips ON routes."routeId" = trips."routeId" WHERE routes.route_short_name = $1 LIMIT 1',
+            'SELECT route_short_name, trip_headsign, route_color, route_text_color FROM routes JOIN trips ON routes."route_id" = trips."route_id" WHERE routes.route_short_name = $1 LIMIT 1',
             [routeShortName]
         );
         if (result.rows.length > 0) {
@@ -518,18 +518,18 @@ app.get('/api/stop/:stopId', async (req, res) => {
             WITH StopSequence AS (
                 SELECT 
                     stop_times.stop_id,
-                    trips."routeId",
+                    trips."route_id",
                     trips.trip_headsign,
                     stop_times.stop_sequence,
-                    MAX(stop_times.stop_sequence) OVER (PARTITION BY trips."tripId") as max_sequence,
-                    MIN(stop_times.stop_sequence) OVER (PARTITION BY trips."tripId") as min_sequence
+                    MAX(stop_times.stop_sequence) OVER (PARTITION BY trips."trip_id") as max_sequence,
+                    MIN(stop_times.stop_sequence) OVER (PARTITION BY trips."trip_id") as min_sequence
                 FROM stop_times
-                JOIN trips ON stop_times.trip_id = trips."tripId"
+                JOIN trips ON stop_times.trip_id = trips."trip_id"
                 WHERE stop_times.stop_id = $1
             ),
             RouteDirections AS (
                 SELECT DISTINCT
-                    routes."routeId",
+                    routes."route_id",
                     routes.route_short_name,
                     routes.route_long_name,
                     routes.route_color,
@@ -541,13 +541,13 @@ app.get('/api/stop/:stopId', async (req, res) => {
                         ELSE 'intermediate'
                     END as stop_position
                 FROM routes
-                JOIN trips ON routes."routeId" = trips."routeId"
-                JOIN stop_times ON trips."tripId" = stop_times.trip_id
-                JOIN StopSequence ss ON ss."routeId" = routes."routeId"
+                JOIN trips ON routes."route_id" = trips."route_id"
+                JOIN stop_times ON trips."trip_id" = stop_times.trip_id
+                JOIN StopSequence ss ON ss."route_id" = routes."route_id"
                 WHERE stop_times.stop_id = $1
             )
             SELECT DISTINCT ON (route_short_name)
-                "routeId" as route_id,
+                "route_id" as route_id,
                 route_short_name,
                 route_long_name,
                 route_color,
@@ -648,8 +648,8 @@ app.get('/api/route-stops/:routeId', async (req, res) => {
                 st.stop_sequence
             FROM stops s
             JOIN stop_times st ON s.stop_id = st.stop_id
-            JOIN trips t ON st.trip_id = t."tripId"
-            WHERE t."routeId" = $1
+            JOIN trips t ON st.trip_id = t.trip_id
+            WHERE t.route_id = $1
             ORDER BY s.stop_id, st.stop_sequence
         `;
         
@@ -767,8 +767,8 @@ app.get('/api/common-routes', async (req, res) => {
         const destRoutesResult = await query(`
             SELECT DISTINCT routes.route_short_name
             FROM routes
-            JOIN trips ON routes."routeId" = trips."routeId"
-            JOIN stop_times ON trips."tripId" = stop_times.trip_id
+            JOIN trips ON routes."route_id" = trips."route_id"
+            JOIN stop_times ON trips."trip_id" = stop_times.trip_id
             WHERE stop_times.stop_id = $1
         `, [destStopId]);
 
@@ -779,8 +779,8 @@ app.get('/api/common-routes', async (req, res) => {
             const stopRoutesResult = await query(`
                 SELECT DISTINCT routes.route_short_name
                 FROM routes
-                JOIN trips ON routes."routeId" = trips."routeId"
-                JOIN stop_times ON trips."tripId" = stop_times.trip_id
+                JOIN trips ON routes."route_id" = trips."route_id"
+                JOIN stop_times ON trips."trip_id" = stop_times.trip_id
                 WHERE stop_times.stop_id = $1
             `, [stop.stop_id]);
 
@@ -838,8 +838,8 @@ app.get('/api/find-route', async (req, res) => {
             const result = await query(`
                 SELECT DISTINCT routes.route_short_name
                 FROM routes
-                JOIN trips ON routes."routeId" = trips."routeId"
-                JOIN stop_times ON trips."tripId" = stop_times.trip_id
+                JOIN trips ON routes."route_id" = trips."route_id"
+                JOIN stop_times ON trips."trip_id" = stop_times.trip_id
                 WHERE stop_times.stop_id = $1
             `, [stopId]);
             return result.rows.map(row => row.route_short_name);
@@ -859,8 +859,8 @@ app.get('/api/find-route', async (req, res) => {
                 SELECT DISTINCT s.stop_id, s.name, s.lat, s.lon, r.route_short_name
                 FROM stops s
                 JOIN stop_times st ON s.stop_id = st.stop_id
-                JOIN trips t ON st.trip_id = t."tripId"
-                JOIN routes r ON t."routeId" = r."routeId"
+                JOIN trips t ON st.trip_id = t."trip_id"
+                JOIN routes r ON t."route_id" = r."route_id"
                 WHERE r.route_short_name = ANY($1::text[])
             `, [fromStopRoutes]);
 
@@ -906,14 +906,14 @@ app.get('/api/find-route', async (req, res) => {
 async function getRoutesForStop(stopId) {
     const routesQuery = `
         SELECT DISTINCT 
-            routes."routeId" as route_id,
+            routes."route_id" as route_id,
             routes.route_short_name,
             routes.route_long_name,
             routes.route_color,
             routes.route_text_color
         FROM routes
-        JOIN trips ON routes."routeId" = trips."routeId"
-        JOIN stop_times ON trips."tripId" = stop_times.trip_id
+        JOIN trips ON routes."route_id" = trips."route_id"
+        JOIN stop_times ON trips."trip_id" = stop_times.trip_id
         WHERE stop_times.stop_id = $1
         ORDER BY routes.route_short_name;
     `;

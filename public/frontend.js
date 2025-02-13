@@ -8,6 +8,8 @@ let currentRoutePolyline = null;
 let userPosition = null;
 let isCompassAvailable = false;
 let vehicleDetails = {};
+let lastKnownDirection = 0;
+let compassInterval = null;
 
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing map...');
@@ -387,10 +389,10 @@ function showUserPosition() {
                                 let direction = 0;
                                 if (event.webkitCompassHeading) {
                                     // iOS devices
-                                    direction = event.webkitCompassHeading + 135;
+                                    direction = event.webkitCompassHeading; // + 135
                                 } else if (event.alpha !== null) {
                                     // Android devices
-                                    direction = (360 - event.alpha) + 135;
+                                    direction = (360 - event.alpha); // + 135
                                 }
                                 
                                 // Adjust for screen orientation
@@ -399,7 +401,7 @@ function showUserPosition() {
                                 }
                                 
                                 // Normalize direction to stay within 0-360 range
-                                direction = direction % 360;
+                                direction = direction % 360; // + 135
                                 
                                 cone.style.transform = `rotate(${direction}deg)`;
                                 cone.style.transformOrigin = 'center center';
@@ -410,7 +412,7 @@ function showUserPosition() {
                         window.addEventListener('deviceorientation', function(event) {
                             const cone = document.querySelector('.direction-cone');
                             if (cone && event.alpha !== null) {
-                                let direction = (360 - event.alpha) + 135;
+                                let direction = (360 - event.alpha)
                                 if (window.orientation) {
                                     direction += window.orientation;
                                 }
@@ -992,28 +994,29 @@ function checkCompassAvailability() {
 }
 
 function handleOrientation(event) {
+    if (!event) return;
+    
     const cone = document.querySelector('.direction-cone');
-    if (cone) {
-        let direction = 0;
-        if (event.webkitCompassHeading) {
-            // iOS devices
-            direction = event.webkitCompassHeading + 90;
-        } else if (event.alpha !== null) {
-            // Android devices
-            direction = (360 - event.alpha) + 90;
-        }
-        
-        // Adjust for screen orientation
-        if (window.orientation) {
-            direction += window.orientation;
-        }
-        
-        // Normalize direction to stay within 0-360 range
-        direction = direction % 360;
-        
-        cone.style.transform = `rotate(${direction}deg)`;
-        cone.style.transformOrigin = 'center center';
+    if (!cone) return;
+
+    let direction;
+    
+    if (event.webkitCompassHeading !== undefined) {
+        // iOS devices
+        direction = event.webkitCompassHeading;
+    } else if (event.alpha !== null) {
+        // Android devices
+        direction = 360 - event.alpha;
+    } else {
+        return;
     }
+
+    // Add 90 degrees to point in the right direction
+    direction = (direction + 90) % 360;
+    
+    // Apply the rotation directly
+    cone.style.transform = `rotate(${direction}deg)`;
+    cone.style.transformOrigin = 'center center';
 }
 
 function handleLocationError(error) {
@@ -1053,31 +1056,128 @@ async function requestCompassPermissions() {
 
 // Add this function to handle compass initialization
 function initializeCompass() {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ devices
+        DeviceOrientationEvent.requestPermission()
+            .then(permission => {
+                if (permission === 'granted') {
+                    isCompassAvailable = true;
+                    setupCompassListeners();
+                }
+            })
+            .catch(console.error);
+    } else {
+        // Other devices
+        setupCompassListeners();
+    }
+}
+
+function setupCompassListeners() {
+    // Remove existing listeners
+    window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.removeEventListener('deviceorientation', handleOrientation, true);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('focus', handleAppFocus);
+    
+    // Add orientation listeners
     if (window.DeviceOrientationEvent) {
+        if ('ondeviceorientationabsolute' in window) {
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }
+
+    // Add visibility and focus handlers
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleAppFocus);
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        // Force compass recalibration
+        setupCompassListeners();
+        
+        // Request a new reading immediately
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS 13+ devices - request permission immediately
             DeviceOrientationEvent.requestPermission()
                 .then(permission => {
                     if (permission === 'granted') {
-                        isCompassAvailable = true;
-                        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        window.dispatchEvent(new Event('deviceorientation'));
                     }
-                })
-                .catch(error => {
-                    console.error('Error requesting compass permission:', error);
                 });
         } else {
-            // Non iOS devices
-            window.addEventListener('deviceorientation', function(event) {
-                isCompassAvailable = (event.alpha != null);
-                if (isCompassAvailable) {
-                    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                }
-            }, { once: true });
+            window.dispatchEvent(new Event('deviceorientation'));
         }
     }
+}
+
+function handleAppFocus() {
+    // Force compass recalibration
+    setupCompassListeners();
+    
+    // Request a new reading immediately
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+            .then(permission => {
+                if (permission === 'granted') {
+                    window.dispatchEvent(new Event('deviceorientation'));
+                }
+            });
+    } else {
+        window.dispatchEvent(new Event('deviceorientation'));
+    }
+}
+
+function handleAppBlur() {
+    // Clean up listeners when app loses focus
+    window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.removeEventListener('deviceorientation', handleOrientation, true);
+}
+
+function updateCompassDirection() {
+    const cone = document.querySelector('.direction-cone');
+    if (!cone || !isCompassAvailable) return;
+
+    // Get the current rotation
+    const currentRotation = getCurrentRotation(cone);
+    
+    // Calculate the shortest rotation path to the target direction
+    let diff = ((lastKnownDirection - currentRotation + 540) % 360) - 180;
+    
+    // Animate the rotation
+    animateRotation(cone, currentRotation, currentRotation + diff);
+}
+
+function getCurrentRotation(element) {
+    const style = window.getComputedStyle(element);
+    const matrix = new WebKitCSSMatrix(style.transform);
+    return Math.round(Math.atan2(matrix.b, matrix.a) * (180 / Math.PI)) || 0;
+}
+
+function animateRotation(element, start, end) {
+    const duration = 3000; // Match the update interval
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Ease the rotation
+        const easeProgress = progress < .5 ? 
+            2 * progress * progress : 
+            -1 + (4 - 2 * progress) * progress;
+        
+        const currentRotation = start + (end - start) * easeProgress;
+        element.style.transform = `rotate(${currentRotation}deg)`;
+        element.style.transformOrigin = 'center center';
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+    
+    requestAnimationFrame(update);
 }
 
 async function updateBusMarker(position, details) {
