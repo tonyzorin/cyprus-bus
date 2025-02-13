@@ -56,6 +56,7 @@ app.use(backend.json({ limit: '10mb' })); // Increase the limit if needed
 
 app.listen(port, async () => {
     console.log(`Server listening on port ${port}`);
+    await initializeRoutesByCity();
     await initializeGTFS();
 });
 
@@ -158,15 +159,15 @@ app.get('/api/stops', async (req, res) => {
 
     try {
         // Get bounds or center point from query parameters
-        const { bounds, lat, lon, limit = '50' } = req.query;
+        const { bounds, stop_lat, stop_lon, limit = '50' } = req.query;
         const stopLimit = parseInt(limit);
         
         let whereClause = `
             WHERE 
-                lat IS NOT NULL 
-                AND lon IS NOT NULL
-                AND CAST(lat AS FLOAT) != 0 
-                AND CAST(lon AS FLOAT) != 0
+                stop_lat IS NOT NULL 
+                AND stop_lon IS NOT NULL
+                AND CAST(stop_lat AS FLOAT) != 0 
+                AND CAST(stop_lon AS FLOAT) != 0
         `;
 
         if (bounds) {
@@ -177,18 +178,18 @@ app.get('/api/stops', async (req, res) => {
                 AND CAST(lon AS FLOAT) >= ${west}
                 AND CAST(lon AS FLOAT) <= ${east}
             `;
-        } else if (lat && lon) {
+        } else if (stop_lat && stop_lon) {
             whereClause += `
-                AND earth_box(ll_to_earth(${lat}, ${lon}), 3000) @> ll_to_earth(CAST(lat AS FLOAT), CAST(lon AS FLOAT))
+                AND earth_box(ll_to_earth(${stop_lat}, ${stop_lon}), 3000) @> ll_to_earth(CAST(stop_lat AS FLOAT), CAST(stop_lon AS FLOAT))
             `;
         }
 
         const result = await query(`
             SELECT 
                 CAST(stop_id AS TEXT) as stop_id,
-                name,
-                CAST(lat AS FLOAT) as lat,
-                CAST(lon AS FLOAT) as lon
+                stop_name,
+                CAST(stop_lat AS FLOAT) as stop_lat,
+                CAST(stop_lon AS FLOAT) as stop_lon
             FROM stops
             ${whereClause}
             ORDER BY CAST(stop_id AS INTEGER)
@@ -568,7 +569,7 @@ app.get('/api/stop/:stopId', async (req, res) => {
         const routes = routesResult.rows;
 
         // Get current stop details to help determine direction
-        const stopResult = await query('SELECT lat, lon FROM stops WHERE stop_id = $1', [stopId]);
+        const stopResult = await query('SELECT stop_lat, stop_lon FROM stops WHERE stop_id = $1', [stopId]);
         const currentStop = stopResult.rows[0];
 
         // Combine real-time data with route information
@@ -642,9 +643,9 @@ app.get('/api/route-stops/:routeId', async (req, res) => {
         const queryText = `
             SELECT DISTINCT ON (s.stop_id) 
                 s.stop_id, 
-                s.name AS stop_name, 
-                s.lat AS stop_lat, 
-                s.lon AS stop_lon, 
+                s.stop_name AS stop_name, 
+                s.stop_lat AS stop_lat, 
+                s.stop_lon AS stop_lon, 
                 st.stop_sequence
             FROM stops s
             JOIN stop_times st ON s.stop_id = st.stop_id
@@ -882,14 +883,14 @@ app.get('/api/find-route', async (req, res) => {
         // Prepare the response
         const response = {
             from_stop_id: fromStop.stop_id,
-            from_stop_name: fromStop.name,
-            from_stop_lat: fromStop.lat,
-            from_stop_lon: fromStop.lon,
+            from_stop_name: fromStop.stop_name,
+            from_stop_lat: fromStop.stop_lat,
+            from_stop_lon: fromStop.stop_lon,
             from_stop_routes: fromStopRoutes,
             to_stop_id: toStop.stop_id,
-            to_stop_name: toStop.name,
-            to_stop_lat: toStop.lat,
-            to_stop_lon: toStop.lon,
+            to_stop_name: toStop.stop_name,
+            to_stop_lat: toStop.stop_lat,
+            to_stop_lon: toStop.stop_lon,
             to_stop_routes: toStopRoutes,
             direct_routes: directRoutes,
             transfer_routes: transferRoutes
@@ -1007,3 +1008,165 @@ Time: ${formatDateTime(new Date())}`;
         });
     }
 });
+
+app.get('/api/routes-by-city', async (req, res) => {
+    try {
+        // First, let's log the query parameters
+        console.log('Query params:', req.query);
+
+        let queryStr = `
+            SELECT DISTINCT
+                routes.route_id::text,
+                routes.route_short_name,
+                routes.route_long_name,
+                routes.route_color,
+                routes.route_text_color,
+                rbc.city as original_city,
+                CASE 
+                    WHEN rbc.city = 'limassol' THEN 'Limassol'
+                    WHEN rbc.city = 'nicosia' THEN 'Nicosia'
+                    WHEN rbc.city = 'pafos' THEN 'Pafos'
+                    WHEN rbc.city = 'famagusta' THEN 'Famagusta'
+                    WHEN rbc.city = 'intercity' THEN 'Intercity'
+                    WHEN rbc.city = 'larnaca' THEN 'Larnaca'
+                    WHEN rbc.city = 'pame_express' THEN 'Pame Express'
+                    ELSE 'Other'
+                END as city,
+                CASE WHEN routes.route_short_name ~ '^[0-9]+$' 
+                     THEN CAST(routes.route_short_name AS INTEGER) 
+                     ELSE 999999 
+                END as route_number_order
+            FROM routes_by_city rbc
+            JOIN routes ON routes.route_id::text = rbc.route_id
+        `;
+
+        let whereConditions = [];
+        let queryParams = [];
+        let paramCount = 1;
+
+        // Handle city filter
+        const city = Object.keys(req.query)[0];
+        if (city && !city.includes(',')) {
+            whereConditions.push(`rbc.city = $${paramCount}`);
+            queryParams.push(city.toLowerCase());
+            paramCount++;
+        }
+
+        // Handle route numbers filter
+        const routes = req.query[Object.keys(req.query)[0]];
+        if (routes && routes.includes(',')) {
+            whereConditions.push(`routes.route_short_name = ANY($${paramCount}::text[])`);
+            queryParams.push(routes.split(','));
+            paramCount++;
+        }
+
+        // Add WHERE clause if we have conditions
+        if (whereConditions.length > 0) {
+            queryStr += ` WHERE ${whereConditions.join(' AND ')}`;
+        }
+
+        queryStr += ` ORDER BY city, route_number_order, route_short_name`;
+
+        // Log the final query and parameters
+        console.log('Query:', queryStr);
+        console.log('Params:', queryParams);
+
+        // Execute query with parameters
+        const result = await query(queryStr, queryParams);
+        
+        // Log raw results
+        console.log('Raw query results:', result.rows);
+
+        // Group routes by city and then by short_name
+        const routesByCity = result.rows.reduce((acc, route) => {
+            if (!acc[route.city]) {
+                acc[route.city] = {};
+            }
+            
+            if (!acc[route.city][route.route_short_name]) {
+                acc[route.city][route.route_short_name] = {
+                    route_short_name: route.route_short_name,
+                    routes: []
+                };
+            }
+            
+            acc[route.city][route.route_short_name].routes.push({
+                route_id: route.route_id,
+                route_long_name: route.route_long_name,
+                route_color: route.route_color || 'FFFFFF',
+                route_text_color: route.route_text_color || '000000'
+            });
+            
+            return acc;
+        }, {});
+
+        // Log intermediate state
+        console.log('Grouped by city:', routesByCity);
+
+        // Convert to array format
+        const formattedResponse = Object.entries(routesByCity).map(([city, routes]) => ({
+            city,
+            routes: Object.values(routes)
+        }));
+
+        // Log final response
+        console.log('Final response:', formattedResponse);
+
+        res.json(formattedResponse);
+    } catch (error) {
+        console.error('Error fetching routes by city:', error);
+        res.status(500).json({ error: 'Failed to fetch routes' });
+    }
+});
+
+// Add this function to initialize the routes_by_city table
+async function initializeRoutesByCity() {
+    try {
+        // Drop the table if it exists to ensure clean data
+        await query(`DROP TABLE IF EXISTS routes_by_city`);
+
+        // Create the table
+        await query(`
+            CREATE TABLE routes_by_city (
+                city VARCHAR(50),
+                route_id VARCHAR(50),
+                route_short_name VARCHAR(50),
+                PRIMARY KEY (route_id)
+            )
+        `);
+
+        // Read and parse the CSV file
+        const csvContent = fs.readFileSync('routes_by_city.csv', 'utf-8');
+        const lines = csvContent.split('\n');
+        
+        // Skip header
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            // Parse CSV line (handling quoted values)
+            const values = line.split(',').map(val => val.trim().replace(/^"|"$/g, ''));
+            if (values.length !== 3) continue;
+            
+            const [city, route_id, route_short_name] = values;
+            
+            // Insert the data
+            await query(
+                'INSERT INTO routes_by_city (city, route_id, route_short_name) VALUES ($1, $2, $3) ON CONFLICT (route_id) DO UPDATE SET city = $1, route_short_name = $3',
+                [city, route_id, route_short_name]
+            );
+        }
+
+        // Verify the data
+        const count = await query('SELECT COUNT(*) FROM routes_by_city');
+        console.log(`Successfully initialized routes_by_city table with ${count.rows[0].count} routes`);
+        
+        // Log sample data for verification
+        const sample = await query('SELECT * FROM routes_by_city LIMIT 5');
+        console.log('Sample data:', sample.rows);
+
+    } catch (error) {
+        console.error('Error initializing routes_by_city table:', error);
+        throw error; // Rethrow to handle it in the server startup
+    }
+}

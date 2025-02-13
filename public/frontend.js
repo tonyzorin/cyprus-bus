@@ -10,6 +10,7 @@ let isCompassAvailable = false;
 let vehicleDetails = {};
 let lastKnownDirection = 0;
 let compassInterval = null;
+let selectedRoutes = new Set();
 
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing map...');
@@ -721,7 +722,7 @@ function displayStops(stops) {
             })
         }).addTo(map);
 
-        marker.bindPopup(`<div style="min-width: 300px;"><b>${stop.name}</b><br>Stop ID: ${stop.stop_id}<br><div id="stop-${stop.stop_id}-buses">Loading...</div></div>`);
+        marker.bindPopup(`<div style="min-width: 300px;"><b>${stop.stop_name}</b><br>Stop ID: ${stop.stop_id}<br><div id="stop-${stop.stop_id}-buses">Loading...</div></div>`);
         marker.on('click', () => fetchStopInfo(stop.stop_id));
         busStopMarkers[stop.stop_id] = marker;
     });
@@ -1269,4 +1270,201 @@ function createBusMarker(data) {
 
     console.log('Marker created and added to map');
     return marker;
+}
+
+// Add this CSS to keep footer fixed
+function addFixedFooterStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .content {
+            padding-bottom: 60px; /* Height of footer */
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Update the stats page to show correct active section
+function updateActiveSection(section) {
+    const sections = ['map', 'stats', 'routes', 'telegram'];
+    sections.forEach(s => {
+        const element = document.querySelector(`.footer-icon[data-section="${s}"]`);
+        if (element) {
+            element.classList.toggle('active', s === section);
+        }
+    });
+}
+
+function createRoutesSelector() {
+    const modal = document.createElement('div');
+    modal.className = 'routes-modal';
+    modal.innerHTML = `
+        <div class="routes-modal-content">
+            <div class="routes-header">
+                <h2>Select Routes</h2>
+                <div class="global-actions">
+                    <button onclick="selectAllRoutes()">Select All</button>
+                    <button onclick="deselectAllRoutes()">Select None</button>
+                </div>
+            </div>
+            <div class="routes-list" id="routesList">
+                Loading routes...
+            </div>
+        </div>
+    `;
+
+    loadRoutes();
+    return modal;
+}
+
+async function loadRoutes() {
+    try {
+        const response = await fetch('/api/routes-by-city');
+        const cities = await response.json();
+        
+        const routesList = document.getElementById('routesList');
+        routesList.innerHTML = cities.map(city => `
+            <div class="city-section">
+                <div class="city-header">
+                    <h3>${city.city}</h3>
+                    <div>
+                        <button onclick="selectAllCityRoutes('${city.city}')">Select All</button>
+                        <button onclick="deselectAllCityRoutes('${city.city}')">Select None</button>
+                    </div>
+                </div>
+                <div class="routes">
+                    ${city.routes.map(route => `
+                        <div class="route-item" data-route="${route.route_short_name}">
+                            <label>
+                                <input type="checkbox" 
+                                       onchange="toggleRoute('${route.routes.map(r => r.route_id).join(',')}')"
+                                       ${selectedRoutes.has(route.route_short_name) ? 'checked' : ''}>
+                                Route ${route.route_short_name}
+                            </label>
+                            <button onclick="showRouteDetails('${route.route_short_name}')">Details</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading routes:', error);
+        document.getElementById('routesList').innerHTML = 'Error loading routes';
+    }
+}
+
+function showRouteDetails(routeShortName) {
+    // Show a modal with all routes that have this short name
+    // This will be implemented in the next step
+}
+
+function initializeRouteSelection() {
+    // Load selection from URL
+    const params = new URLSearchParams(window.location.search);
+    const routes = params.get('routes');
+    if (routes) {
+        selectedRoutes = new Set(routes.split(','));
+    }
+}
+
+function updateRouteSelection() {
+    // Update URL with current selection
+    const params = new URLSearchParams(window.location.search);
+    if (selectedRoutes.size > 0) {
+        params.set('routes', Array.from(selectedRoutes).join(','));
+    } else {
+        params.delete('routes');
+    }
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+
+    // Update visible buses
+    Object.entries(busMarkers).forEach(([vehicleId, marker]) => {
+        const routeId = vehicleDetails[vehicleId]?.tripInfo?.routeId;
+        if (selectedRoutes.size === 0 || selectedRoutes.has(routeId)) {
+            marker.addTo(map);
+        } else {
+            marker.remove();
+        }
+    });
+}
+
+function showRoutesSelector() {
+    const existingModal = document.querySelector('.routes-modal');
+    if (existingModal) {
+        existingModal.remove();
+        return;
+    }
+
+    const modal = createRoutesSelector();
+    document.body.appendChild(modal);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+function selectAllRoutes() {
+    const checkboxes = document.querySelectorAll('.route-item input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        const routeIds = checkbox.getAttribute('data-route-ids').split(',');
+        routeIds.forEach(id => selectedRoutes.add(id));
+    });
+    updateRouteSelection();
+}
+
+function deselectAllRoutes() {
+    const checkboxes = document.querySelectorAll('.route-item input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    selectedRoutes.clear();
+    updateRouteSelection();
+}
+
+function selectAllCityRoutes(city) {
+    const citySection = document.querySelector(`.city-section[data-city="${city}"]`);
+    const checkboxes = citySection.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        const routeIds = checkbox.getAttribute('data-route-ids').split(',');
+        routeIds.forEach(id => selectedRoutes.add(id));
+    });
+    updateRouteSelection();
+}
+
+function deselectAllCityRoutes(city) {
+    const citySection = document.querySelector(`.city-section[data-city="${city}"]`);
+    const checkboxes = citySection.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        const routeIds = checkbox.getAttribute('data-route-ids').split(',');
+        routeIds.forEach(id => selectedRoutes.delete(id));
+    });
+    updateRouteSelection();
+}
+
+function toggleRoute(routeIds) {
+    const ids = routeIds.split(',');
+    const checkbox = event.target;
+    
+    if (checkbox.checked) {
+        ids.forEach(id => selectedRoutes.add(id));
+    } else {
+        ids.forEach(id => selectedRoutes.delete(id));
+    }
+    
+    updateRouteSelection();
 }
