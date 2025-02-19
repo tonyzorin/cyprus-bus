@@ -13,6 +13,8 @@ const path = require("path");
 const env = process.env.NODE_ENV || 'dev';
 const winston = require('winston');
 require('winston-daily-rotate-file');
+const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
+const POSTHOG_API_URL = process.env.POSTHOG_API_ENDPOINT || 'https://eu.posthog.com';
 
 // Add logging configuration
 const logger = winston.createLogger({
@@ -65,6 +67,15 @@ app.listen(port, async () => {
 let lastGTFSStatus = null;
 let messageHistory = [];
 const MAX_MESSAGES_PER_HOUR = 10;
+
+// Add this near the top of the file with other global variables
+let rideNowCache = {
+    lastUpdate: 0,
+    data: null
+};
+
+// Track if a refresh is already in progress
+let refreshPromise = null;
 
 function sendTelegramAlert(message, isTest = false) {
     const now = Date.now();
@@ -154,15 +165,39 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/api/stops', async (req, res) => {
-    // Set cache headers for 24 hours
-    res.set('Cache-Control', 'public, max-age=86400');
-    res.set('Expires', new Date(Date.now() + 86400000).toUTCString());
+    // Get bounds or center point from query parameters
+    const { bounds, stop_lat, stop_lon, limit, radius = '2000' } = req.query;
+    let stopLimit = null;
+
+    // Only apply limit if specifically requested
+    if (limit) {
+        stopLimit = parseInt(limit) || 100; // Default to 100 if parsing fails
+    }
+
+    const searchRadius = parseInt(radius) || 2000; // Default to 2000m if parsing fails
+
+    // Validate parameters
+    if (stop_lat && (isNaN(parseFloat(stop_lat)) || isNaN(parseFloat(stop_lon)))) {
+        return res.status(400).json({ error: 'Invalid lat/lon parameters' });
+    }
+
+    if (bounds) {
+        const boundsParts = bounds.split(',').map(Number);
+        if (boundsParts.length !== 4 || boundsParts.some(isNaN)) {
+            return res.status(400).json({ error: 'Invalid bounds parameter. Format should be south,west,north,east' });
+        }
+    }
+
+    // Check if this is a request for all stops (no filters)
+    const isRequestForAllStops = !bounds && !stop_lat;
+
+    // Set cache headers for 1 year (365 days)
+    res.set('Cache-Control', 'public, max-age=31536000');
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+    res.set('Expires', oneYearFromNow.toUTCString());
 
     try {
-        // Get bounds or center point from query parameters
-        const { bounds, stop_lat, stop_lon, limit = '50' } = req.query;
-        const stopLimit = parseInt(limit);
-        
         let whereClause = `
             WHERE 
                 stop_lat IS NOT NULL 
@@ -174,31 +209,50 @@ app.get('/api/stops', async (req, res) => {
         if (bounds) {
             const [south, west, north, east] = bounds.split(',').map(Number);
             whereClause += `
-                AND CAST(lat AS FLOAT) >= ${south}
-                AND CAST(lat AS FLOAT) <= ${north}
-                AND CAST(lon AS FLOAT) >= ${west}
-                AND CAST(lon AS FLOAT) <= ${east}
+                AND CAST(stop_lat AS FLOAT) >= ${south}
+                AND CAST(stop_lat AS FLOAT) <= ${north}
+                AND CAST(stop_lon AS FLOAT) >= ${west}
+                AND CAST(stop_lon AS FLOAT) <= ${east}
             `;
         } else if (stop_lat && stop_lon) {
+            // Calculate distance using the Haversine formula instead of PostGIS functions
             whereClause += `
-                AND earth_box(ll_to_earth(${stop_lat}, ${stop_lon}), 3000) @> ll_to_earth(CAST(stop_lat AS FLOAT), CAST(stop_lon AS FLOAT))
+                AND (
+                    6371 * acos(
+                        cos(radians(${parseFloat(stop_lat)})) * 
+                        cos(radians(CAST(stop_lat AS FLOAT))) * 
+                        cos(radians(CAST(stop_lon AS FLOAT)) - radians(${parseFloat(stop_lon)})) + 
+                        sin(radians(${parseFloat(stop_lat)})) * 
+                        sin(radians(CAST(stop_lat AS FLOAT)))
+                    ) <= ${searchRadius / 1000}
+                )
             `;
         }
 
-        const result = await query(`
+        const queryString = `
             SELECT 
                 CAST(stop_id AS TEXT) as stop_id,
-                stop_name,
-                CAST(stop_lat AS FLOAT) as stop_lat,
+                stop_name, 
+                CAST(stop_lat AS FLOAT) as stop_lat, 
                 CAST(stop_lon AS FLOAT) as stop_lon
             FROM stops
             ${whereClause}
             ORDER BY CAST(stop_id AS INTEGER)
-            LIMIT ${stopLimit}
-        `);
+            ${isRequestForAllStops || !stopLimit ? '' : `LIMIT ${stopLimit}`}
+        `;
 
-        console.log(`Fetched ${result.rows.length} stops`);
-        res.json(result.rows);
+        console.log('Stops query:', queryString);
+        const result = await query(queryString);
+
+        // Add lat and lon fields to make frontend compatible
+        const stopsWithCompatibleFormat = result.rows.map(stop => ({
+            ...stop,
+            lat: stop.stop_lat,  // Add lat field that maps to stop_lat
+            lon: stop.stop_lon   // Add lon field that maps to stop_lon
+        }));
+
+        console.log(`Fetched ${stopsWithCompatibleFormat.length} stops`);
+        res.json(stopsWithCompatibleFormat);
     } catch (err) {
         console.error('Error fetching stops:', err);
         res.status(500).json({ 
@@ -494,14 +548,32 @@ app.get('/api/stop/:stopId', async (req, res) => {
                 arrivalTime = new Date(currentTime.getTime() + timeLeft * 60000);
             } else {
                 const [hours, minutes] = arrivalTimeText.split(':').map(Number);
-                arrivalTime = new Date(currentTime);
+                
+                // Cyprus is in UTC+3 timezone
+                const cyprusOffset = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+                const cyprusTime = new Date(currentTime.getTime() + cyprusOffset);
+                
+                // Create arrival time based on Cyprus time, not server time
+                arrivalTime = new Date(cyprusTime);
                 arrivalTime.setHours(hours, minutes, 0, 0);
 
-                if (arrivalTime < currentTime) {
+                // If the arrival time is before the current time in Cyprus, the bus is probably scheduled for tomorrow
+                if (arrivalTime < cyprusTime) {
+                    // Only add a day if the time difference is significant (more than 22 hours)
+                    // This prevents times like 13:55 from being interpreted as the next day
+                    const diffMs = cyprusTime - arrivalTime;
+                    const diffHours = diffMs / (1000 * 60 * 60);
+                    
+                    if (diffHours > 22) {
                     arrivalTime.setDate(arrivalTime.getDate() + 1);
+                    } else {
+                        // Add hours until it's in the future
+                        arrivalTime = new Date(cyprusTime.getTime() + (diffMs > 0 ? 0 : -diffMs));
+                    }
                 }
 
-                timeLeft = Math.round((arrivalTime - currentTime) / 60000);
+                // Calculate minutes from current Cyprus time
+                timeLeft = Math.round((arrivalTime - cyprusTime) / 60000);
             }
 
             if (isNaN(timeLeft) || !isFinite(timeLeft)) {
@@ -670,9 +742,9 @@ app.get('/api/nearby-stops', async (req, res) => {
     try {
         const result = await query(`
             SELECT *,
-                   (6371 * acos(cos(radians($1)) * cos(radians(stop_lat)) * cos(radians(stop_lon) - radians($2)) + sin(radians($1)) * sin(radians(stop_lat)))) AS distance
+                   (6371 * acos(cos(radians($1)) * cos(radians(stop_lat)) * cos(radians(stop_lon) - radians($2)) AS distance
             FROM stops
-            WHERE (6371 * acos(cos(radians($1)) * cos(radians(stop_lat)) * cos(radians(stop_lon) - radians($2)) + sin(radians($1)) * sin(radians(stop_lat)))) < $3
+            WHERE (6371 * acos(cos(radians($1)) * cos(radians(stop_lat)) * cos(radians(stop_lon) - radians($2)) + sin(radians($1)) < $3
             ORDER BY distance
         `, [lat, lon, radius / 1000]); // Convert radius to km
         res.json(result.rows);
@@ -1012,86 +1084,57 @@ Time: ${formatDateTime(new Date())}`;
 
 app.get('/api/routes-by-city', async (req, res) => {
     try {
-        // First, let's log the query parameters
-        console.log('Query params:', req.query);
-
         let queryStr = `
-            SELECT DISTINCT
-                routes.route_id::text,
-                routes.route_short_name,
-                routes.route_long_name,
-                routes.route_color,
-                routes.route_text_color,
-                rbc.city as original_city,
-                CASE 
-                    WHEN rbc.city = 'limassol' THEN 'Limassol'
-                    WHEN rbc.city = 'nicosia' THEN 'Nicosia'
-                    WHEN rbc.city = 'pafos' THEN 'Pafos'
-                    WHEN rbc.city = 'famagusta' THEN 'Famagusta'
-                    WHEN rbc.city = 'intercity' THEN 'Intercity'
-                    WHEN rbc.city = 'larnaca' THEN 'Larnaca'
-                    WHEN rbc.city = 'pame_express' THEN 'Pame Express'
-                    ELSE 'Other'
-                END as city,
-                CASE WHEN routes.route_short_name ~ '^[0-9]+$' 
-                     THEN CAST(routes.route_short_name AS INTEGER) 
-                     ELSE 999999 
-                END as route_number_order
-            FROM routes_by_city rbc
-            JOIN routes ON routes.route_id::text = rbc.route_id
+            WITH unique_routes AS (
+                SELECT DISTINCT ON (routes.route_short_name, routes.city)
+                    routes.route_id::text,
+                    routes.route_short_name,
+                    routes.route_long_name,
+                    routes.route_color,
+                    routes.route_text_color,
+                    routes.city,
+                    CASE 
+                        WHEN routes.city = 'limassol' THEN 'Limassol'
+                        WHEN routes.city = 'nicosia' THEN 'Nicosia'
+                        WHEN routes.city = 'pafos' THEN 'Pafos'
+                        WHEN routes.city = 'famagusta' THEN 'Famagusta'
+                        WHEN routes.city = 'intercity' THEN 'Intercity'
+                        WHEN routes.city = 'larnaca' THEN 'Larnaca'
+                        WHEN routes.city = 'pame_express' THEN 'Pame Express'
+                        ELSE 'Other'
+                    END as display_city,
+                    CASE WHEN routes.route_short_name ~ '^[0-9]+$' 
+                         THEN CAST(routes.route_short_name AS INTEGER) 
+                         ELSE 999999 
+                    END as route_number_order
+                FROM routes
+                WHERE routes.city IS NOT NULL
+            )
+            SELECT * FROM unique_routes
+            ORDER BY display_city, route_number_order, route_short_name
         `;
 
-        let whereConditions = [];
-        let queryParams = [];
-        let paramCount = 1;
+        const result = await query(queryStr);
+        console.log(`Found ${result.rows.length} routes`);
 
-        // Handle city filter
-        const city = Object.keys(req.query)[0];
-        if (city && !city.includes(',')) {
-            whereConditions.push(`rbc.city = $${paramCount}`);
-            queryParams.push(city.toLowerCase());
-            paramCount++;
-        }
-
-        // Handle route numbers filter
-        const routes = req.query[Object.keys(req.query)[0]];
-        if (routes && routes.includes(',')) {
-            whereConditions.push(`routes.route_short_name = ANY($${paramCount}::text[])`);
-            queryParams.push(routes.split(','));
-            paramCount++;
-        }
-
-        // Add WHERE clause if we have conditions
-        if (whereConditions.length > 0) {
-            queryStr += ` WHERE ${whereConditions.join(' AND ')}`;
-        }
-
-        queryStr += ` ORDER BY city, route_number_order, route_short_name`;
-
-        // Log the final query and parameters
-        console.log('Query:', queryStr);
-        console.log('Params:', queryParams);
-
-        // Execute query with parameters
-        const result = await query(queryStr, queryParams);
-        
-        // Log raw results
-        console.log('Raw query results:', result.rows);
-
-        // Group routes by city and then by short_name
         const routesByCity = result.rows.reduce((acc, route) => {
-            if (!acc[route.city]) {
-                acc[route.city] = {};
+            const cityName = route.display_city;
+            
+            if (!acc[cityName]) {
+                acc[cityName] = {
+                    city: cityName,
+                    routes: {}
+                };
             }
             
-            if (!acc[route.city][route.route_short_name]) {
-                acc[route.city][route.route_short_name] = {
+            if (!acc[cityName].routes[route.route_short_name]) {
+                acc[cityName].routes[route.route_short_name] = {
                     route_short_name: route.route_short_name,
                     routes: []
                 };
             }
             
-            acc[route.city][route.route_short_name].routes.push({
+            acc[cityName].routes[route.route_short_name].routes.push({
                 route_id: route.route_id,
                 route_long_name: route.route_long_name,
                 route_color: route.route_color || 'FFFFFF',
@@ -1101,22 +1144,20 @@ app.get('/api/routes-by-city', async (req, res) => {
             return acc;
         }, {});
 
-        // Log intermediate state
-        console.log('Grouped by city:', routesByCity);
-
-        // Convert to array format
-        const formattedResponse = Object.entries(routesByCity).map(([city, routes]) => ({
-            city,
-            routes: Object.values(routes)
+        const formattedResponse = Object.values(routesByCity).map(city => ({
+            city: city.city,
+            routes: Object.values(city.routes)
         }));
 
-        // Log final response
-        console.log('Final response:', formattedResponse);
-
+        console.log('Sending response with cities:', formattedResponse.map(c => c.city));
         res.json(formattedResponse);
+
     } catch (error) {
         console.error('Error fetching routes by city:', error);
-        res.status(500).json({ error: 'Failed to fetch routes' });
+        res.status(500).json({ 
+            error: 'Failed to fetch routes',
+            details: error.message
+        });
     }
 });
 
@@ -1172,66 +1213,206 @@ async function initializeRoutesByCity() {
     }
 }
 
-// Add raw data endpoints
-app.get('/api/vehicle-positions/raw', async (req, res) => {
-    try {
-        const positionsData = await readPositionsJson();
-        res.json(positionsData);
-    } catch (error) {
-        console.error('Error fetching raw vehicle positions:', error);
-        res.status(500).json({ error: 'Failed to fetch raw vehicle positions' });
+// Add this function to fetch and cache RideNow data
+async function fetchRideNowData(forceRefresh = false) {
+    const CACHE_DURATION = 30 * 1000; // 30 seconds
+    const now = Date.now();
+    
+    // If we have cached data and it's still fresh, return it immediately
+    if (!forceRefresh && rideNowCache.data && (now - rideNowCache.lastUpdate) < CACHE_DURATION) {
+        return rideNowCache.data;
     }
-});
-
-app.get('/api/trip-updates/raw', async (req, res) => {
-    try {
-        const updatesData = await readUpdatesJson();
-        res.json(updatesData);
-    } catch (error) {
-        console.error('Error fetching raw trip updates:', error);
-        res.status(500).json({ error: 'Failed to fetch raw trip updates' });
-    }
-});
-
-// Add debug endpoint for raw GTFS data
-app.get('/api/debug/gtfs', async (req, res) => {
-    try {
-        const positionsData = await readPositionsJson();
+    
+    // If we have cached data but it's stale, initiate a background refresh and return cached data
+    if (!forceRefresh && rideNowCache.data) {
+        // If we're not already refreshing, start a refresh in the background
+        if (!refreshPromise) {
+            refreshPromise = fetchRideNowDataFromAPI()
+                .catch(error => console.error('Background refresh failed:', error))
+                .finally(() => { refreshPromise = null; });
+        }
         
-        // Return complete raw data
-        const debug = {
-            header: positionsData.header,
-            timestamp: positionsData.header?.timestamp,
-            incrementality: positionsData.header?.incrementality,
-            gtfsRealtimeVersion: positionsData.header?.gtfsRealtimeVersion,
-            totalEntities: positionsData.entity?.length || 0,
-            entities: positionsData.entity?.map(e => ({
-                id: e.id,
-                vehicle: {
-                    trip: e.vehicle?.trip,
-                    vehicle: e.vehicle?.vehicle,
-                    position: e.vehicle?.position,
-                    currentStatus: e.vehicle?.currentStatus,
-                    timestamp: e.vehicle?.timestamp,
-                    congestionLevel: e.vehicle?.congestionLevel,
-                    stopId: e.vehicle?.stopId
+        // Return stale data while refresh happens in background
+        return rideNowCache.data;
+    }
+    
+    // If we have no cached data or a refresh is forced, wait for the API response
+    try {
+        if (!refreshPromise) {
+            refreshPromise = fetchRideNowDataFromAPI();
+        }
+        
+        const data = await refreshPromise;
+        refreshPromise = null;
+        return data;
+    } catch (error) {
+        refreshPromise = null;
+        // If we have cached data, return it despite the error
+        if (rideNowCache.data) {
+            console.error('Fetch failed, returning cached data:', error.message);
+            return rideNowCache.data;
+        }
+        throw error;
+    }
+}
+
+async function fetchRideNowDataFromAPI() {
+    console.log('Fetching RideNow data with headers:', {
+        'Authorization-token': process.env.RIDENOW_API_KEY?.substring(0, 10) + '...'
+    });
+    
+    try {
+        const response = await axios.get(process.env.RIDENOW_API_ENDPOINT, {
+            headers: {
+                'Authorization-token': process.env.RIDENOW_API_KEY
+            }
+        });
+
+        console.log('RideNow API response status:', response.status);
+        
+        rideNowCache = {
+            lastUpdate: Date.now(),
+            data: response.data
+        };
+
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching RideNow data:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message
+        });
+        throw error;
+    }
+}
+
+// Add endpoint for nearby cars
+app.get('/api/ridenow', async (req, res) => {
+    try {
+        const { lat, lon } = req.query;
+        
+        // Validate parameters
+        if (!lat || !lon) {
+            return res.status(400).json({ 
+                error: 'Missing required parameters: lat and lon'
+            });
+        }
+
+        const userLat = parseFloat(lat);
+        const userLon = parseFloat(lon);
+        
+        // Get all cars data
+        const rideNowData = await fetchRideNowData();
+        
+        // Add cache control headers
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+        res.set('Cache-Duration', '30000');
+        res.set('Last-Update', rideNowCache.lastUpdate.toString());
+
+        // Filter cars within 2km radius
+        const nearbyCars = rideNowData.available_cars.filter(car => {
+            const distance = calculateDistance(
+                userLat, 
+                userLon, 
+                car.lat, 
+                car.lon
+            );
+            return distance <= 2; // 2 km radius
+        });
+
+        res.json({
+            total_nearby: nearbyCars.length,
+            cars: nearbyCars,
+            timestamp: Date.now() // Add timestamp to force different response
+        });
+
+    } catch (error) {
+        console.error('Error fetching nearby RideNow cars:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch nearby cars',
+            details: error.message 
+        });
+    }
+});
+
+// Add endpoint for all cars
+app.get('/api/ridenow/all', async (req, res) => {
+    try {
+        const rideNowData = await fetchRideNowData();
+        res.json(rideNowData);
+    } catch (error) {
+        console.error('Error fetching all RideNow cars:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch cars',
+            details: error.message 
+        });
+    }
+});
+
+// Helper function to calculate distance between two points in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function toRad(degrees) {
+    return degrees * (Math.PI/180);
+}
+
+// Update the analytics endpoint
+app.post('/api/analytics/track', async (req, res) => {
+    try {
+        const { event_name, properties, distinct_id } = req.body;
+        
+        if (!event_name) {
+            return res.status(400).json({ error: 'Missing event_name in request body' });
+        }
+
+        if (!distinct_id) {
+            return res.status(400).json({ error: 'Missing distinct_id in request body' });
+        }
+
+        // Send the event to PostHog using the project API key
+        const response = await axios.post(
+            `${POSTHOG_API_URL}/capture/`,
+            {
+                api_key: process.env.POSTHOG_PROJECT_API_KEY,
+                event: event_name,
+                distinct_id: distinct_id,
+                properties: properties,
+                timestamp: new Date().toISOString()
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
                 }
-            }))
-        };
-        
-        // Add statistics
-        debug.statistics = {
-            totalVehicles: debug.totalEntities,
-            withPosition: debug.entities.filter(e => e.vehicle?.position).length,
-            withTrip: debug.entities.filter(e => e.vehicle?.trip).length,
-            withRouteId: debug.entities.filter(e => e.vehicle?.trip?.routeId).length,
-            withVehicleId: debug.entities.filter(e => e.vehicle?.vehicle?.id).length,
-            uniqueRouteIds: new Set(debug.entities.map(e => e.vehicle?.trip?.routeId).filter(Boolean)).size
-        };
-        
-        res.json(debug);
+            }
+        );
+
+        console.log(`Event "${event_name}" tracked successfully:`, response.data);
+        res.json({ success: true });
+
     } catch (error) {
-        console.error('Error fetching debug GTFS:', error);
-        res.status(500).json({ error: 'Failed to fetch debug GTFS' });
+        console.error('Error tracking analytics event:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message
+        });
+        
+        res.status(500).json({ 
+            error: 'Failed to track analytics event',
+            details: error.message 
+        });
     }
 });

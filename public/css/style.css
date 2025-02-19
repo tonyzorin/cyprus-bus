@@ -249,10 +249,10 @@ h3 {
 .modal-content {
     background-color: #fefefe;
     margin: 15% auto;
-    padding: 20px;
+    padding: 15px;
     border: 1px solid #888;
-    width: 90%;
-    max-width: 400px; /* Adjust this value as needed */
+    width: 80%;
+    max-width: 350px; /* Reduced from 400px */
     border-radius: 10px;
     text-align: center;
     position: relative;
@@ -262,8 +262,8 @@ h3 {
 }
 
 .modal-content h2 {
-    margin-bottom: 15px;
-    font-size: 1.5em;
+    margin-bottom: 12px;
+    font-size: 1.4em;
 }
 
 .qr-code-image {
@@ -339,7 +339,8 @@ h3 {
 
 /* Footer styles */
 .menu-container {
-    background-color: #f3f4f6;
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
     padding: 12px 4px;
     display: flex;
     justify-content: space-evenly;
@@ -348,9 +349,10 @@ h3 {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 80px; /* Set a fixed height for the footer */
+    height: 60px;
     z-index: 1000;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.05);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Adjust body to account for footer */
@@ -361,66 +363,57 @@ body {
 /* Ensure buttons in the footer are clickable */
 .menu-container button,
 .menu-container a {
-    position: relative;
-    z-index: 1001;
-}
-
-/* Share button styles */
-#share-button {
-    z-index: 1002;
-}
-
-
-
-/* Ensure zoom controls and locate button are above the footer */
-.leaflet-bottom {
-    bottom: 80px !important; /* Adjust this value to match your footer height */
-}
-
-.leaflet-control-zoom,
-.leaflet-control-locate {
-    z-index: 1001 !important; /* Ensure these controls are above the footer */
-}
-
-/* Rest of your CSS remains the same */
-
-
-#share-button {
-    z-index: 1000;
-}
-
-/* Adjust footer styles */
-.menu-container {
-    background-color: #f3f4f6;
-    padding: 8px 4px; /* Reduced padding */
-    display: flex;
-    justify-content: space-evenly;
-    align-items: center;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px; /* Reduced height */
-    z-index: 1000;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-}
-
-.menu-container button,
-.menu-container a {
-    font-size: 0.8rem; /* Smaller font size */
-    padding: 4px 8px; /* Reduced padding */
-    border-radius: 4px;
-    text-decoration: none;
     display: flex;
     flex-direction: column;
     align-items: center;
-    color: #4b5563;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 8px 12px;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.menu-container button:hover,
+.menu-container a:hover {
+    color: #334155;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.menu-container button.routes-active,
+.menu-container a.routes-active {
+    color: #2563eb;
+    background-color: rgba(37, 99, 235, 0.1);
+}
+
+.tab-button.bg-blue-500 {
+    color: #2563eb !important;
+    background-color: transparent !important;
 }
 
 .menu-icon {
-    width: 24px; /* Smaller icon size */
-    height: 24px;
-    margin-bottom: 2px;
+    width: 18px;
+    height: 18px;
+    margin-bottom: 4px;
+}
+
+/* Style for the buttons */
+button {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: 500;
+}
+
+/* Update the modal styles to match shadcn aesthetic */
+.modal-content, .route-filter-content, .routes-modal-content, .routes-list-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 /* Adjust map height */
@@ -467,7 +460,7 @@ header > div:first-child {
 }
 
 #share-button {
-    z-index: 1000;
+    z-index: 1002;
 }
 
 /* Add these new styles */
@@ -647,4 +640,268 @@ header > div:first-child {
 .leaflet-right .leaflet-control {
     clear: both !important;
     margin-bottom: 0 !important;
+}
+
+/* Bus stop marker styling */
+.bus-stop-marker {
+    width: 12px;
+    height: 12px;
+    background-color: #3388ff;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.bus-stop-icon {
+    background: none !important;
+}
+
+/* Make sure markers don't have backgrounds */
+.leaflet-marker-icon {
+    background: none !important;
+}
+
+/* Routes Modal Styles - Merged from styles.css */
+.routes-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+}
+
+.routes-modal-content {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.routes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.global-actions button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: #f5f5f5;
+}
+
+.city-section {
+    margin: 20px 0;
+}
+
+.city-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.city-header h3 {
+    margin: 0;
+    color: #333;
+}
+
+.route-item {
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 4px solid;
+    transition: all 0.2s ease;
+}
+
+.route-item:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.route-item label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.route-item input[type="checkbox"] {
+    min-width: 16px;
+    min-height: 16px;
+}
+
+.routes-list {
+    margin-top: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Fix for the Route button in the footer */
+.routes-active {
+    background-color: #4CAF50 !important;
+    color: white !important;
+}
+
+/* Route Filter Modal Styles */
+.route-filter-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.route-filter-content {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    width: 80%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.route-filter-content h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #333;
+}
+
+.route-filter-content h3 {
+    margin: 10px 0;
+    font-size: 1.2rem;
+    color: #444;
+}
+
+.route-filter-content h4 {
+    margin: 8px 0;
+    font-size: 1rem;
+    color: #555;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+#city-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+#city-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #f9f9f9;
+    transition: background-color 0.2s;
+}
+
+#city-checkboxes label:hover {
+    background-color: #e9e9e9;
+}
+
+.route-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.route-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Style for buttons in the filter modal */
+.select-all-routes, .deselect-all-routes {
+    padding: 4px 8px;
+    background: #e9e9e9;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.select-all-routes:hover, .deselect-all-routes:hover {
+    background: #d9d9d9;
+}
+
+/* Action buttons at the bottom of the modal */
+#reset-filters, #apply-filters {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#reset-filters {
+    background: #f1f1f1;
+    border: 1px solid #ccc;
+    color: #333;
+}
+
+#reset-filters:hover {
+    background: #e1e1e1;
+}
+
+#apply-filters {
+    background: #4CAF50;
+    color: white;
+    border: none;
+}
+
+#apply-filters:hover {
+    background: #45a049;
+}
+
+/* Close button */
+#close-filter-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #777;
+}
+
+#close-filter-modal:hover {
+    color: #333;
+}
+
+/* Ensure zoom controls and locate button are above the footer */
+.leaflet-bottom {
+    bottom: 60px !important; /* Adjust this value to match your footer height */
+}
+
+.leaflet-control-zoom,
+.leaflet-control-locate {
+    z-index: 1001 !important; /* Ensure these controls are above the footer */
 }

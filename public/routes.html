@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Routes - Cyprus Buses</title>
+    <link rel="stylesheet" href="./css/style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-2xl font-bold mb-6">Bus Routes</h1>
+        
+        <div id="routesList" class="space-y-6">
+            <!-- Routes will be loaded here -->
+            Loading routes...
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="menu-container bg-gray-200 p-4 flex justify-evenly fixed bottom-0 inset-x-0" style="z-index: 9999;">
+        <button class="tab-button" data-target="index.html">Map</button>
+        <button class="tab-button" data-target="stats.html">Stats</button>
+        <button class="tab-button bg-blue-500 text-white px-4 py-2 rounded" data-target="#">Routes</button>
+        <a href="https://t.me/tonyzorin" class="menu-item">
+            <img src="images/telegram-logo.png" alt="Telegram" class="menu-icon">
+        </a>
+        <a href="https://www.buymeacoffee.com/tonyzorin" class="menu-item">
+            <img src="images/bmc-logo.png" alt="Buy Me a Coffee" class="menu-icon">Say Thanks</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const response = await fetch('/api/routes-by-city');
+                const cities = await response.json();
+                
+                const routesList = document.getElementById('routesList');
+                routesList.innerHTML = cities.map(city => `
+                    <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold">${city.city}</h2>
+                            <div>
+                                <button onclick="selectAllCityRoutes('${city.city}')" 
+                                        class="bg-blue-500 text-white px-3 py-1 rounded mr-2">
+                                    Select All
+                                </button>
+                                <button onclick="deselectAllCityRoutes('${city.city}')"
+                                        class="bg-gray-500 text-white px-3 py-1 rounded">
+                                    Select None
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            ${city.routes.map(route => `
+                                <div class="border rounded p-3 flex justify-between items-center">
+                                    <label class="flex items-center space-x-2">
+                                        <input type="checkbox" 
+                                               class="form-checkbox"
+                                               onchange="toggleRoute('${route.routes.map(r => r.route_id).join(',')}')"
+                                               ${selectedRoutes.has(route.route_short_name) ? 'checked' : ''}>
+                                        <span>Route ${route.route_short_name}</span>
+                                    </label>
+                                    <button onclick="showRouteDetails('${route.route_short_name}')"
+                                            class="text-blue-500 hover:text-blue-700">
+                                        Details
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading routes:', error);
+                document.getElementById('routesList').innerHTML = 'Error loading routes';
+            }
+        });
+
+        // Add navigation handler
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const target = button.getAttribute('data-target');
+                if (target !== '#') {
+                    window.location.href = target;
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
