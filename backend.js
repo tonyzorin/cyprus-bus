@@ -56,7 +56,8 @@ app.use(backend.json({ limit: '10mb' })); // Increase the limit if needed
 
 app.listen(port, async () => {
     console.log(`Server listening on port ${port}`);
-    await initializeRoutesByCity();
+    // Comment out since we already have the data
+    // await initializeRoutesByCity();
     await initializeGTFS();
 });
 
@@ -292,30 +293,21 @@ const fetchData = async (url, errorMessage) => {
     }
 };
 
-// Add cache control headers to prevent caching of vehicle positions
+// Minimal positions endpoint
 app.get('/api/vehicle-positions/minimal', async (req, res) => {
-    // Set no-cache headers
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    res.set('Surrogate-Control', 'no-store');
-    
     try {
         const positionsDataObject = await readPositionsJson();
         
-        if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
-            res.status(503).json({ error: 'GTFS data is not available' });
-            return;
-        }
-
         // Return only essential data for each vehicle
-        const minimalPositions = positionsDataObject.entity.map(position => ({
-            id: position.vehicle?.vehicle?.id,
-            lat: position.vehicle?.position?.latitude,
-            lon: position.vehicle?.position?.longitude,
-            bearing: position.vehicle?.position?.bearing || 0,
-            routeId: position.vehicle?.trip?.routeId
-        })).filter(pos => pos.id && pos.lat && pos.lon);
+        const minimalPositions = positionsDataObject.entity
+            .map(position => ({
+                id: position.vehicle?.vehicle?.id,
+                lat: position.vehicle?.position?.latitude,
+                lon: position.vehicle?.position?.longitude,
+                bearing: position.vehicle?.position?.bearing || 0,
+                routeId: position.vehicle?.trip?.routeId
+            }))
+            .filter(pos => pos.id && pos.lat && pos.lon);  // Only return vehicles with position
 
         res.json(minimalPositions);
     } catch (err) {
@@ -324,29 +316,36 @@ app.get('/api/vehicle-positions/minimal', async (req, res) => {
     }
 });
 
-// New endpoint for full vehicle details
+// Vehicle details endpoint
 app.get('/api/vehicle-details', async (req, res) => {
     try {
         const positionsDataObject = await readPositionsJson();
         
-        if (!positionsDataObject || !Array.isArray(positionsDataObject.entity)) {
-            res.status(503).json({ error: 'GTFS data is not available' });
-            return;
-        }
-
         // Get full details including route information
         const fullDetails = await Promise.all(positionsDataObject.entity.map(async (position) => {
             const routeId = position.vehicle?.trip?.routeId;
-            if (!routeId) return null;
+            const lat = position.vehicle?.position?.latitude;
+            const lon = position.vehicle?.position?.longitude;
+            
+            // Filter out vehicles without position or routeId
+            if (!routeId || !lat || !lon) {
+                console.log(`Skipping vehicle ${position.vehicle?.vehicle?.id}: missing position or routeId`);
+                return null;
+            }
 
+            // First try to find route in routes_by_city
             const routeDetailsResult = await query(
-                `SELECT route_short_name, route_long_name, route_color, route_text_color 
-                 FROM routes 
-                 WHERE route_id = $1`,
+                `SELECT r.route_id, r.route_short_name, r.route_long_name, r.route_color, r.route_text_color 
+                 FROM routes r
+                 JOIN routes_by_city rbc ON r.route_id::text = rbc.route_id
+                 WHERE rbc.route_id = $1`,
                 [routeId]
             );
 
-            if (routeDetailsResult.rows.length === 0) return null;
+            if (routeDetailsResult.rows.length === 0) {
+                console.log(`No route found for GTFS route_id: ${routeId}`);
+                return null;
+            }
 
             const routeDetails = routeDetailsResult.rows[0];
             return {
@@ -359,7 +358,7 @@ app.get('/api/vehicle-details', async (req, res) => {
                     tripId: position.vehicle?.trip?.tripId,
                     startTime: position.vehicle?.trip?.startTime,
                     startDate: position.vehicle?.trip?.startDate,
-                    routeId: routeId
+                    routeId: routeDetails.route_id  // Use DB route_id instead of GTFS route_id
                 },
                 routeInfo: {
                     shortName: routeDetails.route_short_name,
@@ -370,7 +369,9 @@ app.get('/api/vehicle-details', async (req, res) => {
             };
         }));
 
-        res.json(fullDetails.filter(detail => detail !== null));
+        const validDetails = fullDetails.filter(detail => detail !== null);
+        console.log(`Found ${validDetails.length} valid vehicles out of ${fullDetails.length} total`);
+        res.json(validDetails);
     } catch (err) {
         console.error('Error fetching vehicle details:', err);
         res.status(500).json({ error: 'Failed to fetch vehicle details' });
@@ -380,17 +381,17 @@ app.get('/api/vehicle-details', async (req, res) => {
 app.get('/api/route-shapes/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;
-        
-        // First get the route color and a valid shape_id for this route
+        console.log('Looking up route:', routeId);
+
         const routeQuery = await query(`
             SELECT DISTINCT 
                 routes.route_color,
                 trips.shape_id
             FROM routes
             JOIN trips ON routes.route_id = trips.route_id
-            WHERE routes.route_id = $1
+            WHERE routes.route_id::text = $1  -- Cast the column to text
             LIMIT 1
-        `, [parseInt(routeId)]);
+        `, [routeId]);
 
         if (routeQuery.rows.length === 0) {
             console.log('Route not found:', routeId);
@@ -1170,3 +1171,67 @@ async function initializeRoutesByCity() {
         throw error; // Rethrow to handle it in the server startup
     }
 }
+
+// Add raw data endpoints
+app.get('/api/vehicle-positions/raw', async (req, res) => {
+    try {
+        const positionsData = await readPositionsJson();
+        res.json(positionsData);
+    } catch (error) {
+        console.error('Error fetching raw vehicle positions:', error);
+        res.status(500).json({ error: 'Failed to fetch raw vehicle positions' });
+    }
+});
+
+app.get('/api/trip-updates/raw', async (req, res) => {
+    try {
+        const updatesData = await readUpdatesJson();
+        res.json(updatesData);
+    } catch (error) {
+        console.error('Error fetching raw trip updates:', error);
+        res.status(500).json({ error: 'Failed to fetch raw trip updates' });
+    }
+});
+
+// Add debug endpoint for raw GTFS data
+app.get('/api/debug/gtfs', async (req, res) => {
+    try {
+        const positionsData = await readPositionsJson();
+        
+        // Return complete raw data
+        const debug = {
+            header: positionsData.header,
+            timestamp: positionsData.header?.timestamp,
+            incrementality: positionsData.header?.incrementality,
+            gtfsRealtimeVersion: positionsData.header?.gtfsRealtimeVersion,
+            totalEntities: positionsData.entity?.length || 0,
+            entities: positionsData.entity?.map(e => ({
+                id: e.id,
+                vehicle: {
+                    trip: e.vehicle?.trip,
+                    vehicle: e.vehicle?.vehicle,
+                    position: e.vehicle?.position,
+                    currentStatus: e.vehicle?.currentStatus,
+                    timestamp: e.vehicle?.timestamp,
+                    congestionLevel: e.vehicle?.congestionLevel,
+                    stopId: e.vehicle?.stopId
+                }
+            }))
+        };
+        
+        // Add statistics
+        debug.statistics = {
+            totalVehicles: debug.totalEntities,
+            withPosition: debug.entities.filter(e => e.vehicle?.position).length,
+            withTrip: debug.entities.filter(e => e.vehicle?.trip).length,
+            withRouteId: debug.entities.filter(e => e.vehicle?.trip?.routeId).length,
+            withVehicleId: debug.entities.filter(e => e.vehicle?.vehicle?.id).length,
+            uniqueRouteIds: new Set(debug.entities.map(e => e.vehicle?.trip?.routeId).filter(Boolean)).size
+        };
+        
+        res.json(debug);
+    } catch (error) {
+        console.error('Error fetching debug GTFS:', error);
+        res.status(500).json({ error: 'Failed to fetch debug GTFS' });
+    }
+});

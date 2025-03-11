@@ -1,0 +1,115 @@
+openapi: 3.1.0
+info:
+  title: Cyprus Bus API
+  description: API for Cyprus Bus transportation system
+  version: 1.0.0
+  contact:
+    name: Cyprus Bus Team
+servers:
+  - url: http://busonmap.com/api
+    description: Production server
+paths:
+  /api/routes:
+    get:
+      summary: Get all bus routes
+      description: Retrieve a list of all available bus routes
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Route'
+  /api/stops:
+    get:
+      summary: Get all bus stops
+      description: Retrieve a list of all bus stops
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stop'
+  /api/realtime/{routeId}:
+    get:
+      summary: Get real-time bus information
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Real-time bus location and timing information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeInfo'
+components:
+  schemas:
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique route identifier
+        name:
+          type: string
+          description: Route name
+        description:
+          type: string
+          description: Route description
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stop'
+    Stop:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique stop identifier
+        name:
+          type: string
+          description: Stop name
+        location:
+          type: object
+          properties:
+            lat:
+              type: number
+              format: double
+            lon:
+              type: number
+              format: double
+    RealtimeInfo:
+      type: object
+      properties:
+        routeId:
+          type: string
+        vehicles:
+          type: array
+          items:
+            type: object
+            properties:
+              vehicleId:
+                type: string
+              location:
+                type: object
+                properties:
+                  lat:
+                    type: number
+                    format: double
+                  lon:
+                    type: number
+                    format: double
+              nextStop:
+                type: string
+              estimatedArrival:
+                type: string
+                format: date-time 
