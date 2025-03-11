@@ -11,22 +11,25 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "axios": "^1.7.7",
     "cheerio": "^1.0.0-rc.12",
-    "adm-zip": "^0.5.16",
+    "csv-parse": "^5.6.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "gtfs-realtime-bindings": "^1.1.1",
+    "lru-cache": "^11.0.2",
     "node-fetch": "^2.6.9",
+    "node-stream-zip": "^1.15.0",
+    "pg": "^8.11.3",
     "protobufjs": "7.4.0",
-    "sqlite3": "^5.1.7",
     "proxy-agent": "^6.4.0",
+    "soap": "^1.1.7",
+    "sqlite3": "^5.1.7",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "ws": "^8.18.0",
-    "lru-cache": "^11.0.2",
-    "pg": "^8.11.3"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
