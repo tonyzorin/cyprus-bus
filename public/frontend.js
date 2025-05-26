@@ -263,7 +263,7 @@ function updateGTFSStatusUI(status) {
         statusElement.textContent = 'Motion Status: OK ✅';
         statusElement.style.color = 'green';
     } else {
-        statusElement.textContent = '❌ Motion feed is not available';
+        statusElement.textContent = '❌ Motion 💀 Check bus stops for timetables.';
         statusElement.style.color = 'red';
     }
 }
@@ -686,9 +686,9 @@ async function fetchStops(useMapBounds = false) {
 
     try {
         // Try to get from localStorage first
-        const cachedStops = localStorage.getItem('busStops');
-        const cacheTimestamp = localStorage.getItem('busStopsTimestamp');
-        const CACHE_DURATION = 365 * 24 * 60 * 60 * 1000; // 365 days in milliseconds
+        const cachedStops = localStorage.getItem('busStopsV2');
+        const cacheTimestamp = localStorage.getItem('busStopsTimestampV2');
+        const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds
 
         let stops;
         if (cachedStops && cacheTimestamp) {
@@ -710,8 +710,8 @@ async function fetchStops(useMapBounds = false) {
             stops = await response.json();
 
             // Update localStorage
-            localStorage.setItem('busStops', JSON.stringify(stops));
-            localStorage.setItem('busStopsTimestamp', Date.now().toString());
+            localStorage.setItem('busStopsV2', JSON.stringify(stops));
+            localStorage.setItem('busStopsTimestampV2', Date.now().toString());
         }
 
         let filteredStops;
