@@ -78,4 +78,4 @@ For contributing to this project, please refer to our contributing guidelines [l
 
 ## License
 
-[Add license information if applicable]
+See [LICENSE](LICENSE) for details.
